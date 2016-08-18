@@ -656,6 +656,7 @@ bool SolarSystem::loadPlanets(const QString& filePath)
 		}
 
 		const QString coordFuncName = pd.value(secname+"/coord_func", "kepler_orbit").toString(); // 0.20: Add a new default for all non *_special.
+		const QString axisFuncName = pd.value(secname+"/axis_func").toString(); // TODO: Make sense out of it!
 		// qDebug() << "englishName:" << englishName << ", parent:" << strParent <<  ", coord_func:" << coordFuncName;
 		posFuncType posfunc=Q_NULLPTR;
 		KeplerOrbit* orbitPtr=Q_NULLPTR;
@@ -824,7 +825,6 @@ bool SolarSystem::loadPlanets(const QString& filePath)
 			posfunc=posfuncMap.value(coordFuncName, Q_NULLPTR);
 			osculatingFunc=osculatingMap.value(coordFuncName, Q_NULLPTR);
 		}
-
 		if (posfunc==Q_NULLPTR)
 		{
 			qCritical() << "ERROR in section " << secname << ": can't find posfunc " << coordFuncName << " for " << englishName;
@@ -885,9 +885,11 @@ bool SolarSystem::loadPlanets(const QString& filePath)
 				mp->setAbsoluteMagnitudeAndSlope(magnitude, qBound(0.0f, slope, 1.0f));
 			}
 
+			// GZ TODO after rebase: Do we still need to set semimajor axis? Only the orbit needs to know this!
 			mp->setSemiMajorAxis(pd.value(secname+"/orbit_SemiMajorAxis", 0).toDouble());
 			mp->setColorIndexBV(bV);
 			mp->setSpectralType(pd.value(secname+"/spec_t", "").toString(), pd.value(secname+"/spec_b", "").toString());
+			mp->deltaJDE = 2.0*semi_major_axis*StelCore::JD_SECOND;
 
 			systemMinorBodies.push_back(p);
 		}
@@ -898,15 +900,15 @@ bool SolarSystem::loadPlanets(const QString& filePath)
 					      pd.value(secname+"/radius", 1.0).toDouble()/AU,
 					      pd.value(secname+"/oblateness", 0.0).toDouble(),
 					      StelUtils::strToVec3f(pd.value(secname+"/color", "1.0,1.0,1.0").toString()), // halo color
-					      pd.value(secname+"/albedo", 0.25f).toFloat(),
+					      pd.value(secname+"/albedo", 0.075f).toFloat(), // assume very dark surface
 					      pd.value(secname+"/roughness",0.9f).toFloat(),
 					      pd.value(secname+"/outgas_intensity",0.1f).toFloat(),
 					      pd.value(secname+"/outgas_falloff", 0.1f).toFloat(),
 					      pd.value(secname+"/tex_map", "nomap.png").toString(),
 					      pd.value(secname+"/model").toString(),
 					      posfunc,
-					      orbitPtr,
-					      osculatingFunc,
+					      orbitPtr, // the CometOrbit object
+					      osculatingFunc, // ALWAYS NULL for comets.
 					      closeOrbit,
 					      pd.value(secname+"/hidden", false).toBool(),
 					      type,
@@ -924,6 +926,7 @@ bool SolarSystem::loadPlanets(const QString& filePath)
 					mp->setAbsoluteMagnitudeAndSlope(magnitude, slope);
 			}
 
+			// GZ TODO after rebase: Check if Comet needs to know its semimajor axis. Only its Orbit needs to know anything about this.
 			const double eccentricity = pd.value(secname+"/orbit_Eccentricity",0.0).toDouble();
 			const double pericenterDistance = pd.value(secname+"/orbit_PericenterDistance",-1e100).toDouble();
 			if (eccentricity<1 && pericenterDistance>0)
@@ -932,7 +935,7 @@ bool SolarSystem::loadPlanets(const QString& filePath)
 			}
 			systemMinorBodies.push_back(p);
 		}
-		else
+		else // type==star|planet|moon|
 		{
 			// Set possible default name of the normal map for avoiding yin-yang shaped moon
 			// phase when normal map key not exists. Example: moon_normals.png
@@ -979,11 +982,21 @@ bool SolarSystem::loadPlanets(const QString& filePath)
 		// Use more common planet North pole data if available
 		// NB: N pole as defined by IAU (NOT right hand rotation rule)
 		// NB: J2000 epoch
-		const double J2000NPoleRA = pd.value(secname+"/rot_pole_ra", 0.).toDouble()*M_PI/180.;
-		const double J2000NPoleDE = pd.value(secname+"/rot_pole_de", 0.).toDouble()*M_PI/180.;
+		// GZ TODO for 0.20: Make this more flexible with changing axes. and have special functions for more complicated axes.
+		double J2000NPoleRA  = pd.value(secname+"/rot_pole_ra", 0.).toDouble()*M_PI/180.;
+		double J2000NPoleRA1 = pd.value(secname+"/rot_pole_ra1", 0.).toDouble()*M_PI/180.;
+		double J2000NPoleDE  = pd.value(secname+"/rot_pole_de", 0.).toDouble()*M_PI/180.;
+		double J2000NPoleDE1 = pd.value(secname+"/rot_pole_de1", 0.).toDouble()*M_PI/180.;
+		double J2000NPoleW0  = pd.value(secname+"/rot_pole_w0", 0.).toDouble(); // stays in degrees!
+		double J2000NPoleW1  = pd.value(secname+"/rot_pole_w1", 0.).toDouble(); // stays in degrees!
+
+		double rotPeriod=pd.value(secname+"/rot_periode", pd.value(secname+"/orbit_Period", 24.).toDouble()).toDouble()/24.;
+		double rotOffset=pd.value(secname+"/rot_rotation_offset",0.).toDouble();
 
 		if((J2000NPoleRA!=0.) || (J2000NPoleDE!=0.))
 		{
+			// Old solution: Make this once for J2000.
+			// New in 0.18: Repeat this block in planet::update() if required.
 			Vec3d J2000NPole;
 			StelUtils::spheToRect(J2000NPoleRA,J2000NPoleDE,J2000NPole);
 
@@ -997,18 +1010,36 @@ bool SolarSystem::loadPlanets(const QString& filePath)
 
 			// qDebug() << "\tCalculated rotational obliquity: " << rotObliquity*180./M_PI << endl;
 			// qDebug() << "\tCalculated rotational ascending node: " << rotAscNode*180./M_PI << endl;
+			/*
+			if (J2000NPoleW0 >0)
+			{
+				// this is just another name for offset...
+				rotOffset=J2000NPoleW0;
+			}
+			if (J2000NPoleW1 >0)
+			{
+				// this is just another expression for rotational speed.
+				rotPeriod=360.0/J2000NPoleW1;
+				// qDebug() << "\t" << englishName << ": Calculated rotational speed: " << rotPeriod*180./M_PI << endl;
+			}
+			*/
 		}
 
 		// rot_periode given in hours, or orbit_Period given in days, orbit_visualization_period in days. The latter should have a meaningful default.
 		p->setRotationElements(
-			pd.value(secname+"/rot_periode", pd.value(secname+"/orbit_Period", 1.).toDouble()*24.).toFloat()/24.f,
-			pd.value(secname+"/rot_rotation_offset",0.).toFloat(),
+			rotPeriod,
+			rotOffset,
 			pd.value(secname+"/rot_epoch", J2000).toDouble(),
 			rotObliquity,
 			rotAscNode,
-			pd.value(secname+"/rot_precession_rate",0.).toFloat()*M_PIf/(180*36525),
-			pd.value(secname+"/orbit_visualization_period", fabs(pd.value(secname+"/orbit_Period", 1.).toDouble())).toDouble()); // this is given in days...
-
+			//pd.value(secname+"/rot_precession_rate",0.).toDouble()*M_PI/(180*36525),
+			J2000NPoleRA,
+			J2000NPoleRA1,
+			J2000NPoleDE,
+			J2000NPoleDE1,
+			J2000NPoleW0,
+			J2000NPoleW1,
+			pd.value(secname+"/orbit_visualization_period", fabs(pd.value(secname+"/orbit_Period", 1.).toDouble())).toDouble()); // TODO; Get rid of the last parameter!
 
 		if (pd.value(secname+"/rings", 0).toBool()) {
 			const float rMin = pd.value(secname+"/ring_inner_size").toFloat()/AUf;
@@ -1072,6 +1103,11 @@ void SolarSystem::computePositions(double dateJDE, PlanetP observerPlanet)
 		{
 			const double light_speed_correction = (p->getHeliocentricEclipticPos()-obsPosJDE).length() * (AU / (SPEED_OF_LIGHT * 86400.));
 			p->computePosition(dateJDE-light_speed_correction);
+			if      (p->englishName=="Moon")    Planet::updatePlanetCorrections(dateJDE-light_speed_correction, 3);
+			else if (p->englishName=="Jupiter") Planet::updatePlanetCorrections(dateJDE-light_speed_correction, 5);
+			else if (p->englishName=="Saturn")  Planet::updatePlanetCorrections(dateJDE-light_speed_correction, 6);
+			else if (p->englishName=="Uranus")  Planet::updatePlanetCorrections(dateJDE-light_speed_correction, 7);
+			else if (p->englishName=="Neptune") Planet::updatePlanetCorrections(dateJDE-light_speed_correction, 8);
 		}
 	}
 	else
@@ -1079,6 +1115,11 @@ void SolarSystem::computePositions(double dateJDE, PlanetP observerPlanet)
 		for (const auto& p : systemPlanets)
 		{
 			p->computePosition(dateJDE);
+			if      (p->englishName=="Moon")    Planet::updatePlanetCorrections(dateJDE, 3);
+			else if (p->englishName=="Jupiter") Planet::updatePlanetCorrections(dateJDE, 5);
+			else if (p->englishName=="Saturn")  Planet::updatePlanetCorrections(dateJDE, 6);
+			else if (p->englishName=="Uranus")  Planet::updatePlanetCorrections(dateJDE, 7);
+			else if (p->englishName=="Neptune") Planet::updatePlanetCorrections(dateJDE, 8);
 		}
 		lightTimeSunPosition.set(0.,0.,0.);
 	}
@@ -1723,6 +1764,7 @@ void SolarSystem::update(double deltaTime)
 bool SolarSystem::nearLunarEclipse() const
 {
 	// TODO: could replace with simpler test
+	// TODO Source?
 
 	Vec3d e = getEarth()->getEclipticPos();
 	Vec3d m = getMoon()->getEclipticPos();  // relative to earth
@@ -1734,11 +1776,11 @@ bool SolarSystem::nearLunarEclipse() const
 	Vec3d shadow = en * (e.length() + m.length());
 
 	// find shadow radii in AU
-	double r_penumbra = shadow.length()*702378.1/AU/e.length() - 696000/AU;
+	double r_penumbra = shadow.length()*702378.1/AU/e.length() - 696000./AU;
 
 	// modify shadow location for scaled moon
 	Vec3d mdist = shadow - mh;
-	if(mdist.length() > r_penumbra + 2000/AU) return false;   // not visible so don't bother drawing
+	if(mdist.length() > r_penumbra + 2000./AU) return false;   // not visible so don't bother drawing
 
 	return true;
 }

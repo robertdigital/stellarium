@@ -102,6 +102,8 @@ public:
 	//! These are the parameters in the IAU's two-parameter magnitude system
 	//! for minor planets. They are used to calculate the apparent magnitude at
 	//! different phase angles.
+	//! @param magnitude Absolute magnitude H
+	//! @param slope Slope parameter G. This is usually [0..1], sometimes slightly outside. Allowed here [-1..2].
 	void setAbsoluteMagnitudeAndSlope(const float magnitude, const float slope);
 
 	//! renders the subscript in a minor planet provisional designation with HTML.
@@ -119,12 +121,13 @@ public:
 	void setColorIndexBV(float bv=99.f);
 
 	//! get sidereal period for minor planet
-	double getSiderealPeriod() const;
+	virtual double getSiderealPeriod() const;
 
 private:
 	int minorPlanetNumber;
-	float  slopeParameter;
-	double semiMajorAxis;
+	// float absoluteMagnitude; // now in Planet class already.
+	float  slopeParameter; // This is G from the H, G system for computation of apparent magnitude.
+	//double semiMajorAxis;  // orbital parameter. WHY DO WE NEED THAT SEPARATELY FROM ORBIT?
 
 	bool nameIsProvisionalDesignation;
 	QString provisionalDesignationHtml;
