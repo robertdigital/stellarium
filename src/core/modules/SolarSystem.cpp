@@ -886,7 +886,7 @@ bool SolarSystem::loadPlanets(const QString& filePath)
 			}
 
 			// GZ TODO after rebase: Do we still need to set semimajor axis? Only the orbit needs to know this!
-			mp->setSemiMajorAxis(pd.value(secname+"/orbit_SemiMajorAxis", 0).toDouble());
+			// mp->setSemiMajorAxis(pd.value(secname+"/orbit_SemiMajorAxis", 0).toDouble());
 			mp->setColorIndexBV(bV);
 			mp->setSpectralType(pd.value(secname+"/spec_t", "").toString(), pd.value(secname+"/spec_b", "").toString());
 			mp->deltaJDE = 2.0*semi_major_axis*StelCore::JD_SECOND;
@@ -926,13 +926,13 @@ bool SolarSystem::loadPlanets(const QString& filePath)
 					mp->setAbsoluteMagnitudeAndSlope(magnitude, slope);
 			}
 
-			// GZ TODO after rebase: Check if Comet needs to know its semimajor axis. Only its Orbit needs to know anything about this.
-			const double eccentricity = pd.value(secname+"/orbit_Eccentricity",0.0).toDouble();
-			const double pericenterDistance = pd.value(secname+"/orbit_PericenterDistance",-1e100).toDouble();
-			if (eccentricity<1 && pericenterDistance>0)
-			{
-				mp->setSemiMajorAxis(pericenterDistance / (1.0-eccentricity));
-			}
+//			// GZ TODO after rebase: Check if Comet needs to know its semimajor axis. Only its Orbit needs to know anything about this.
+//			const double eccentricity = pd.value(secname+"/orbit_Eccentricity",0.0).toDouble();
+//			const double pericenterDistance = pd.value(secname+"/orbit_PericenterDistance",-1e100).toDouble();
+//			if (eccentricity<1 && pericenterDistance>0)
+//			{
+//				mp->setSemiMajorAxis(pericenterDistance / (1.0-eccentricity));
+//			}
 			systemMinorBodies.push_back(p);
 		}
 		else // type==star|planet|moon|
@@ -1103,11 +1103,11 @@ void SolarSystem::computePositions(double dateJDE, PlanetP observerPlanet)
 		{
 			const double light_speed_correction = (p->getHeliocentricEclipticPos()-obsPosJDE).length() * (AU / (SPEED_OF_LIGHT * 86400.));
 			p->computePosition(dateJDE-light_speed_correction);
-			if      (p->englishName=="Moon")    Planet::updatePlanetCorrections(dateJDE-light_speed_correction, 3);
-			else if (p->englishName=="Jupiter") Planet::updatePlanetCorrections(dateJDE-light_speed_correction, 5);
-			else if (p->englishName=="Saturn")  Planet::updatePlanetCorrections(dateJDE-light_speed_correction, 6);
-			else if (p->englishName=="Uranus")  Planet::updatePlanetCorrections(dateJDE-light_speed_correction, 7);
-			else if (p->englishName=="Neptune") Planet::updatePlanetCorrections(dateJDE-light_speed_correction, 8);
+			if      (p->englishName=="Moon")    Planet::updatePlanetCorrections(dateJDE-light_speed_correction, Planet::EarthMoon);
+			else if (p->englishName=="Jupiter") Planet::updatePlanetCorrections(dateJDE-light_speed_correction, Planet::Jupiter);
+			else if (p->englishName=="Saturn")  Planet::updatePlanetCorrections(dateJDE-light_speed_correction, Planet::Saturn);
+			else if (p->englishName=="Uranus")  Planet::updatePlanetCorrections(dateJDE-light_speed_correction, Planet::Uranus);
+			else if (p->englishName=="Neptune") Planet::updatePlanetCorrections(dateJDE-light_speed_correction, Planet::Neptune);
 		}
 	}
 	else
@@ -1115,11 +1115,11 @@ void SolarSystem::computePositions(double dateJDE, PlanetP observerPlanet)
 		for (const auto& p : systemPlanets)
 		{
 			p->computePosition(dateJDE);
-			if      (p->englishName=="Moon")    Planet::updatePlanetCorrections(dateJDE, 3);
-			else if (p->englishName=="Jupiter") Planet::updatePlanetCorrections(dateJDE, 5);
-			else if (p->englishName=="Saturn")  Planet::updatePlanetCorrections(dateJDE, 6);
-			else if (p->englishName=="Uranus")  Planet::updatePlanetCorrections(dateJDE, 7);
-			else if (p->englishName=="Neptune") Planet::updatePlanetCorrections(dateJDE, 8);
+			if      (p->englishName=="Moon")    Planet::updatePlanetCorrections(dateJDE, Planet::EarthMoon);
+			else if (p->englishName=="Jupiter") Planet::updatePlanetCorrections(dateJDE, Planet::Jupiter);
+			else if (p->englishName=="Saturn")  Planet::updatePlanetCorrections(dateJDE, Planet::Saturn);
+			else if (p->englishName=="Uranus")  Planet::updatePlanetCorrections(dateJDE, Planet::Uranus);
+			else if (p->englishName=="Neptune") Planet::updatePlanetCorrections(dateJDE, Planet::Neptune);
 		}
 		lightTimeSunPosition.set(0.,0.,0.);
 	}

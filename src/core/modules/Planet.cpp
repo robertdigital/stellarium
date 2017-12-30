@@ -315,11 +315,11 @@ void Planet::init()
 	vMagAlgorithmMap.insert(Planet::Generic,			"Generic");
 	vMagAlgorithmMap.insert(Planet::UndefinedAlgorithm,		"");
 
-	updatePlanetCorrections(J2000, 3);
-	updatePlanetCorrections(J2000, 5);
-	updatePlanetCorrections(J2000, 6);
-	updatePlanetCorrections(J2000, 7);
-	updatePlanetCorrections(J2000, 8);
+	updatePlanetCorrections(J2000, EarthMoon);
+	updatePlanetCorrections(J2000, Jupiter);
+	updatePlanetCorrections(J2000, Saturn);
+	updatePlanetCorrections(J2000, Uranus);
+	updatePlanetCorrections(J2000, Neptune);
 }
 
 Planet::~Planet()
@@ -473,7 +473,13 @@ QString Planet::getInfoString(const StelCore* core, const InfoStringGroup& flags
 		// TRANSLATORS: Ecliptical rectangular coordinates
 		oss << QString("%1 XYZ (%2): %3/%4/%5").arg(qc_("Ecliptical","coordinates")).arg(algoName).arg(QString::number(eclPos[0], 'f', 7), QString::number(eclPos[1], 'f', 7), QString::number(eclPos[2], 'f', 7)) << "<br>";
 	}
+
+		oss << q_("DEBUG: Sidereal Time of Prime Meridian (angle W): %1°").arg(QString::number(getSiderealTime(core->getJD(), core->getJDE()), 'f', 3)) << "<br>";
+		oss << q_("DEBUG: Axis (RA/Dec): %1/%2").arg(StelUtils::radToDmsStr(getCurrentAxisRA(), true), StelUtils::radToDmsStr(getCurrentAxisDE(), true)) << "<br>";
+		oss << q_("DEBUG: RotObliquity: %1").arg(StelUtils::radToDmsStr(re.obliquity, true)) << "<br>";
+	}
 #endif
+
 	if (flags&Distance)
 	{
 		const double hdistanceAu = getHeliocentricEclipticPos().length();
@@ -629,7 +635,7 @@ QString Planet::getInfoString(const StelCore* core, const InfoStringGroup& flags
 				if (englishName!="Sun")
 					oss << QString("%1: %2").arg(q_("Mean solar day"), StelUtils::hoursToHmsStr(qAbs(getMeanSolarDay()*24))) << "<br />";
 			}
-			else if (re.period==0.f)
+			else if (re.period==0.f) // WILL NEVER BE CALLED! In this case siderealPeriod==0, the enclosing brace will exclude this!
 			{
 				oss << q_("The period of rotation is chaotic") << "<br />";
 			}
@@ -858,6 +864,10 @@ void Planet::setRotationElements(const float _period, const float _offset, const
 	re.W0=_w0;
 	re.W1=_w1;
 
+	re.currentAxisRA=0.; // Set some primitive defaults.
+	re.currentAxisDE=0.;
+	re.currentAxisW=0.;
+
 	re.useICRF=(_w0==0. ? false : true);
 
 	re.siderealPeriod = _siderealPeriod;  // used for drawing orbit lines. THIS ENTRY SHOULD BE REMOVED FROM THE ROTATION ELEMENTS!
@@ -998,7 +1008,7 @@ void Planet::computeTransMatrix(double JD, double JDE)
 			}
 			return;
 		}
-		// Pre-0.16 there was a model with fixed axes in J2000 coordinates given with node and obliquity for all other planets and moons.
+		// Pre-0.18 there was a model with fixed axes in J2000 coordinates given with node and obliquity for all other planets and moons.
 		// IAU prefers axes with RA, DE. These were transformed (if available) to the old system at time of reading ssystem.ini.
 		// Temporally changing axes were not possible. Now we allow it, and re-formulate nodes and obliquity on the fly.
 		double re_ascendingNode=re.ascendingNode;
@@ -1020,12 +1030,15 @@ void Planet::computeTransMatrix(double JD, double JDE)
 		{ // TODO; HERE IS THE MOST URGENT, IMPORTANT AND DEMANDING PART STILL MISSING!!
 			// This is from WGCCRE2009reprint. The angles are always given in degrees. I let the compiler do the conversion. Leave it for readability!
 			// It seems that with these corrections the moon is totally crazy.
-//			J2000NPoleRA += - (3.8787*M_PI/180.)*sin(planetCorrections.E1)  - (0.1204*M_PI/180.)*sin(planetCorrections.E2) + (0.0700*M_PI/180.)*sin(planetCorrections.E3)
-//					- (0.0172*M_PI/180.)*sin(planetCorrections.E4)  + (0.0072*M_PI/180.)*sin(planetCorrections.E6) - (0.0052*M_PI/180.)*sin(planetCorrections.E10)
-//					+ (0.0043*M_PI/180.)*sin(planetCorrections.E13);
-//			J2000NPoleDE += + (1.5419*M_PI/180.)*cos(planetCorrections.E1)  + (0.0239*M_PI/180.)*cos(planetCorrections.E2) - (0.0278*M_PI/180.)*cos(planetCorrections.E3)
-//					+ (0.0068*M_PI/180.)*cos(planetCorrections.E4)  - (0.0029*M_PI/180.)*cos(planetCorrections.E6) + (0.0009*M_PI/180.)*cos(planetCorrections.E7)
-//					+ (0.0008*M_PI/180.)*cos(planetCorrections.E10) - (0.0009*M_PI/180.)*cos(planetCorrections.E13);
+			// With these lines commented away, but with PlanetCorrections still computed, the Moon tumbles around starting in early 2165.
+			// However, it looks better in prehistory. This is totally non-obvious! Unclear what happens.
+			// With these corrections applied, it even rotates in present times.
+			J2000NPoleRA += - (3.8787*M_PI/180.)*sin(planetCorrections.E1)  - (0.1204*M_PI/180.)*sin(planetCorrections.E2) + (0.0700*M_PI/180.)*sin(planetCorrections.E3)
+					- (0.0172*M_PI/180.)*sin(planetCorrections.E4)  + (0.0072*M_PI/180.)*sin(planetCorrections.E6) - (0.0052*M_PI/180.)*sin(planetCorrections.E10)
+					+ (0.0043*M_PI/180.)*sin(planetCorrections.E13);
+			J2000NPoleDE += + (1.5419*M_PI/180.)*cos(planetCorrections.E1)  + (0.0239*M_PI/180.)*cos(planetCorrections.E2) - (0.0278*M_PI/180.)*cos(planetCorrections.E3)
+					+ (0.0068*M_PI/180.)*cos(planetCorrections.E4)  - (0.0029*M_PI/180.)*cos(planetCorrections.E6) + (0.0009*M_PI/180.)*cos(planetCorrections.E7)
+					+ (0.0008*M_PI/180.)*cos(planetCorrections.E10) - (0.0009*M_PI/180.)*cos(planetCorrections.E13);
 			// TODO: With DE43x, get orientation from ephemeris lookup.
 		}
 		else if (englishName=="Jupiter")
@@ -1111,7 +1124,6 @@ void Planet::computeTransMatrix(double JD, double JDE)
 				J2000NPoleRA+=(M_PI/180.* 3.10)*sin(planetCorrections.S6);
 				J2000NPoleDE+=(M_PI/180.*-0.35)*cos(planetCorrections.S6);
 			}
-			/* // not in ssystem.ini...
 			else if (englishName=="Janus")
 			{
 				J2000NPoleRA+=(M_PI/180.*0.023)*sin(2.*planetCorrections.S2)-(M_PI/180.*1.623)*sin(planetCorrections.S2);
@@ -1121,7 +1133,7 @@ void Planet::computeTransMatrix(double JD, double JDE)
 			{
 				J2000NPoleRA+=(M_PI/180.*0.086)*sin(2.*planetCorrections.S1)-(M_PI/180.*3.153)*sin(planetCorrections.S1);
 				J2000NPoleDE+=(M_PI/180.*0.005)*cos(2.*planetCorrections.S1)-(M_PI/180.*0.356)*cos(planetCorrections.S1);
-			}*/
+			}
 		}
 		else if (parent->englishName=="Uranus")
 		{		// Uranus's moons
@@ -1155,7 +1167,6 @@ void Planet::computeTransMatrix(double JD, double JDE)
 				J2000NPoleDE+=(M_PI/180.* 4.25)*cos(planetCorrections.U11) - (M_PI/180.* 0.02)*cos(2.*planetCorrections.U11);
 				retransform=true;
 			}
-			/*// Moons not yet included. Keep code here and activate as needed.
 			else if (englishName=="Cordelia")
 			{
 				J2000NPoleRA+=(M_PI/180.*-0.15)*sin(planetCorrections.U1);
@@ -1168,12 +1179,13 @@ void Planet::computeTransMatrix(double JD, double JDE)
 				J2000NPoleDE+=(M_PI/180.* 0.09)*cos(planetCorrections.U2);
 				retransform=true;
 			}
+			/*// Bianca not yet included. Keep code here and activate as needed.
 			else if (englishName=="Bianca")
 			{
 				J2000NPoleRA+=(M_PI/180.*-0.16)*sin(planetCorrections.U3);
 				J2000NPoleDE+=(M_PI/180.* 0.16)*cos(planetCorrections.U3);
 				retransform=true;
-			}
+			}*/
 			else if (englishName=="Cressida")
 			{
 				J2000NPoleRA+=(M_PI/180.*-0.04)*sin(planetCorrections.U4);
@@ -1192,6 +1204,7 @@ void Planet::computeTransMatrix(double JD, double JDE)
 				J2000NPoleDE+=(M_PI/180.* 0.06)*cos(planetCorrections.U6);
 				retransform=true;
 			}
+			/*// Moons not yet included. Keep code here and activate as needed.
 			else if (englishName=="Portia")
 			{
 				J2000NPoleRA+=(M_PI/180.*-0.09)*sin(planetCorrections.U7);
@@ -1273,6 +1286,10 @@ void Planet::computeTransMatrix(double JD, double JDE)
 
 		if (retransform)
 		{
+
+			re.currentAxisRA=J2000NPoleRA;
+			re.currentAxisDE=J2000NPoleDE;
+
 			Vec3d J2000NPole;
 			StelUtils::spheToRect(J2000NPoleRA,J2000NPoleDE,J2000NPole);
 
@@ -1335,7 +1352,7 @@ void Planet::setRotEquatorialToVsop87(const Mat4d &m)
 
 
 // GZ TODO: UPDATE THIS DESCRIPTION LINE! Compute the z rotation [degrees] to use from equatorial to geographic coordinates.
-// V0.16 sidereal time in this context is the rotation angle W of the Prime meridian from the ascending node of the planet equator on the ICRF equator.
+// V0.18 sidereal time in this context is the rotation angle W of the Prime meridian from the ascending node of the planet equator on the ICRF equator.
 // For Earth (of course) it is sidereal time at Greenwich.
 // The usual model is W=W0+d*W1. Some planets/moons have more complicated rotations though, these should be handled separately in here.
 // TODO: Make sure this is compatible with the old model!
@@ -1355,7 +1372,7 @@ double Planet::getSiderealTime(double JD, double JDE) const
 	{
 		const double t=JDE-J2000;
 		const double T=t/36525.0;
-		double w=re.W0+fmod(t*re.W1, 360.); // W is given and also returned in degrees, clamped to small angles so that adding small corrections makes sense.
+		double w=re.W0+remainder(t*re.W1, 360.); // W is given and also returned in degrees, clamped to small angles so that adding small corrections makes sense.
 		// Corrections from Explanatory Supplement 2013. Moon from WGCCRE2009.
 		if (englishName=="Moon")
 		{
@@ -1367,11 +1384,11 @@ double Planet::getSiderealTime(double JD, double JDE) const
 		}
 		else if (englishName=="Mercury")
 		{
-			const double M1=(174.791086*M_PI/180.0) + ( 4.092335*M_PI/180.0)*t;
-			const double M2=(349.582171*M_PI/180.0) + ( 8.184670*M_PI/180.0)*t;
-			const double M3=(164.373257*M_PI/180.0) + (12.277005*M_PI/180.0)*t;
-			const double M4=(339.164343*M_PI/180.0) + (16.369340*M_PI/180.0)*t;
-			const double M5=(153.955429*M_PI/180.0) + (20.461675*M_PI/180.0)*t;
+			const double M1=(174.791086*M_PI/180.0) + remainder(( 4.092335*M_PI/180.0)*t, 2.0*M_PI);
+			const double M2=(349.582171*M_PI/180.0) + remainder(( 8.184670*M_PI/180.0)*t, 2.0*M_PI);
+			const double M3=(164.373257*M_PI/180.0) + remainder((12.277005*M_PI/180.0)*t, 2.0*M_PI);
+			const double M4=(339.164343*M_PI/180.0) + remainder((16.369340*M_PI/180.0)*t, 2.0*M_PI);
+			const double M5=(153.955429*M_PI/180.0) + remainder((20.461675*M_PI/180.0)*t, 2.0*M_PI);
 
 			w += (-0.00000535)*sin(M5) - (0.00002364)*sin(M4) - (0.00010280)*sin(M3) - (0.00104581)*sin(M2) + (0.00993822)*sin(M1);
 		}
@@ -1445,7 +1462,48 @@ double Planet::getSiderealTime(double JD, double JDE) const
 		}
 		else if (parent->englishName=="Uranus")
 		{
-			if (englishName=="Ariel")
+			if (englishName=="Cordelia")
+			{
+				w-= (0.04)*sin(planetCorrections.U1);
+			}
+			else if (englishName=="Ophelia")
+			{
+				w-= (0.03)*sin(planetCorrections.U2);
+			}
+//			else if (englishName=="Bianca")
+//			{
+//				w-= (0.04)*sin(planetCorrections.U3);
+//			}
+			else if (englishName=="Cressida")
+			{
+				w-= (0.01)*sin(planetCorrections.U4);
+			}
+			else if (englishName=="Desdemona")
+			{
+				w-= (0.04)*sin(planetCorrections.U5);
+			}
+			else if (englishName=="Juliet")
+			{
+				w-= (0.02)*sin(planetCorrections.U6);
+			}
+			/* Moons not yet included. Keep here and activa if required.
+			else if (englishName=="Portia")
+			{
+				w-= (0.02)*sin(planetCorrections.U7);
+			}
+			else if (englishName=="Rosalind")
+			{
+				w-= (0.08)*sin(planetCorrections.U8);
+			}
+			else if (englishName=="Belinda")
+			{
+				w-= (0.01)*sin(planetCorrections.U9);
+			}
+			else if (englishName=="Puck")
+			{
+				w-= (0.09)*sin(planetCorrections.U10);
+			}*/
+			else if (englishName=="Ariel")
 			{
 				w+= (0.05)*sin(planetCorrections.U12) + (0.08)*sin(planetCorrections.U13);
 			}
@@ -1497,6 +1555,7 @@ double Planet::getSiderealTime(double JD, double JDE) const
 				w+= (-0.48)*sin(planetCorrections.Na) + (0.04)*sin(planetCorrections.N6);
 			}
 		}
+		// re.currentAxisW=w; // TODO Maybe allow this later, and separate "computeSiderealTime()" from "getSiderealTime()"
 		return w;
 	}
 
@@ -1583,7 +1642,7 @@ double Planet::getMeanSolarDay() const
 	return msd;
 }
 
-// Get the Planet position in the parent Planet ecliptic (J2000) coordinate in AU
+// Get the Planet position in Cartesian ecliptic (J2000) coordinates in AU, centered on the parent Planet
 Vec3d Planet::getEclipticPos(double dateJDE) const
 {
 	// Use current position if the time match.
@@ -1605,8 +1664,7 @@ Vec3d Planet::getEclipticPos(double dateJDE) const
 // Return heliocentric ecliptical coordinate of p [AU]
 Vec3d Planet::getHeliocentricPos(Vec3d p) const
 {
-	// Note: using shared copies is too slow here.  So we use direct access
-	// instead.
+	// Note: using shared copies is too slow here.  So we use direct access instead.
 	Vec3d pos = p;
 	const Planet* pp = parent.data();
 	if (pp)
@@ -1651,8 +1709,7 @@ void Planet::setHeliocentricEclipticPos(const Vec3d &pos)
 // Return heliocentric velocity of planet.
 Vec3d Planet::getHeliocentricEclipticVelocity() const
 {
-	// Note: using shared copies is too slow here.  So we use direct access
-	// instead.
+	// Note: using shared copies is too slow here.  So we use direct access instead.
 	Vec3d vel = eclipticVelocity;
 	const Planet* pp = parent.data();
 	if (pp)
@@ -3772,97 +3829,97 @@ void Planet::setApparentMagnitudeAlgorithm(QString algorithm)
 	vMagAlgorithm = vMagAlgorithmMap.key(algorithm, Planet::ExplanatorySupplement_2013);
 }
 
-void Planet::updatePlanetCorrections(const double JDE, const int planet)
+void Planet::updatePlanetCorrections(const double JDE, const PlanetCorrection planet)
 {
 	// The angles are always given in degrees. We let the compiler do the conversion. Leave it for readability!
 	double d=(JDE-J2000);
 	double T=d/36525.0;
 
 	switch (planet){
-		case 3:
+		case EarthMoon:
 			if (fabs(JDE-planetCorrections.JDE_E)>0.01)
 			{ // Moon/Earth correction terms. This is from WGCCRE2009. We must fmod them, else we have sin(LARGE)>>1
 				planetCorrections.JDE_E=JDE; // keep record of when these values are valid.
-				planetCorrections.E1= (125.045*M_PI/180.) - fmod(( 0.0529921*M_PI/180.)*d, 2.*M_PI);
-				planetCorrections.E2= (250.089*M_PI/180.) - fmod(( 0.1059842*M_PI/180.)*d, 2.*M_PI);
-				planetCorrections.E3= (260.008*M_PI/180.) + fmod((13.0120009*M_PI/180.)*d, 2.*M_PI);
-				planetCorrections.E4= (176.625*M_PI/180.) + fmod((13.3407154*M_PI/180.)*d, 2.*M_PI);
-				planetCorrections.E5= (357.529*M_PI/180.) + fmod(( 0.9856003*M_PI/180.)*d, 2.*M_PI);
-				planetCorrections.E6= (311.589*M_PI/180.) + fmod((26.4057084*M_PI/180.)*d, 2.*M_PI);
-				planetCorrections.E7= (134.963*M_PI/180.) + fmod((13.0649930*M_PI/180.)*d, 2.*M_PI);
-				planetCorrections.E8= (276.617*M_PI/180.) + fmod(( 0.3287146*M_PI/180.)*d, 2.*M_PI);
-				planetCorrections.E9= ( 34.226*M_PI/180.) + fmod(( 1.7484877*M_PI/180.)*d, 2.*M_PI);
-				planetCorrections.E10=( 15.134*M_PI/180.) - fmod(( 0.1589763*M_PI/180.)*d, 2.*M_PI);
-				planetCorrections.E11=(119.743*M_PI/180.) + fmod(( 0.0036096*M_PI/180.)*d, 2.*M_PI);
-				planetCorrections.E12=(239.961*M_PI/180.) + fmod(( 0.1643573*M_PI/180.)*d, 2.*M_PI);
-				planetCorrections.E13=( 25.053*M_PI/180.) + fmod((12.9590088*M_PI/180.)*d, 2.*M_PI);
+				planetCorrections.E1= (125.045*M_PI/180.) - remainder(( 0.0529921*M_PI/180.)*d, 2.*M_PI);
+				planetCorrections.E2= (250.089*M_PI/180.) - remainder(( 0.1059842*M_PI/180.)*d, 2.*M_PI);
+				planetCorrections.E3= (260.008*M_PI/180.) + remainder((13.0120009*M_PI/180.)*d, 2.*M_PI);
+				planetCorrections.E4= (176.625*M_PI/180.) + remainder((13.3407154*M_PI/180.)*d, 2.*M_PI);
+				planetCorrections.E5= (357.529*M_PI/180.) + remainder(( 0.9856003*M_PI/180.)*d, 2.*M_PI);
+				planetCorrections.E6= (311.589*M_PI/180.) + remainder((26.4057084*M_PI/180.)*d, 2.*M_PI);
+				planetCorrections.E7= (134.963*M_PI/180.) + remainder((13.0649930*M_PI/180.)*d, 2.*M_PI);
+				planetCorrections.E8= (276.617*M_PI/180.) + remainder(( 0.3287146*M_PI/180.)*d, 2.*M_PI);
+				planetCorrections.E9= ( 34.226*M_PI/180.) + remainder(( 1.7484877*M_PI/180.)*d, 2.*M_PI);
+				planetCorrections.E10=( 15.134*M_PI/180.) - remainder(( 0.1589763*M_PI/180.)*d, 2.*M_PI);
+				planetCorrections.E11=(119.743*M_PI/180.) + remainder(( 0.0036096*M_PI/180.)*d, 2.*M_PI);
+				planetCorrections.E12=(239.961*M_PI/180.) + remainder(( 0.1643573*M_PI/180.)*d, 2.*M_PI);
+				planetCorrections.E13=( 25.053*M_PI/180.) + remainder((12.9590088*M_PI/180.)*d, 2.*M_PI);
 			}
 			break;
-		case 5:
+		case Jupiter:
 			if (fabs(JDE-planetCorrections.JDE_J)>0.025) // large changes in the values below :-(
 			{
 				planetCorrections.JDE_J=JDE; // keep record of when these values are valid.
-				planetCorrections.Ja1=(M_PI/180.)*( 99.360714+4850.4046*T); // Jupiter axis terms, Table 10.1
-				planetCorrections.Ja2=(M_PI/180.)*(175.895369+1191.9605*T);
-				planetCorrections.Ja3=(M_PI/180.)*(300.323162+ 262.5475*T);
-				planetCorrections.Ja4=(M_PI/180.)*(114.012305+6070.2476*T);
-				planetCorrections.Ja5=(M_PI/180.)*( 49.511251+  64.3000*T);
-				planetCorrections.J1 =(M_PI/180.)*( 73.32+91472.9*T); // corrective terms for Jupiter' moons, Table 10.10
-				planetCorrections.J2 =(M_PI/180.)*( 24.62+45137.2*T);
-				planetCorrections.J3 =(M_PI/180.)*(283.90+ 4850.7*T);
-				planetCorrections.J4 =(M_PI/180.)*(355.80+ 1191.3*T);
-				planetCorrections.J5 =(M_PI/180.)*(119.90+  262.1*T);
-				planetCorrections.J6 =(M_PI/180.)*(229.80+   64.3*T);
-				planetCorrections.J7 =(M_PI/180.)*(352.25+ 2382.6*T);
-				planetCorrections.J8 =(M_PI/180.)*(113.35+ 6070.0*T);
+				planetCorrections.Ja1=(M_PI/180.)*( 99.360714+remainder( 4850.4046*T, 360.0)); // Jupiter axis terms, Table 10.1
+				planetCorrections.Ja2=(M_PI/180.)*(175.895369+remainder( 1191.9605*T, 360.0));
+				planetCorrections.Ja3=(M_PI/180.)*(300.323162+remainder(  262.5475*T, 360.0));
+				planetCorrections.Ja4=(M_PI/180.)*(114.012305+remainder( 6070.2476*T, 360.0));
+				planetCorrections.Ja5=(M_PI/180.)*( 49.511251+remainder(   64.3000*T, 360.0));
+				planetCorrections.J1 =(M_PI/180.)*( 73.32    +remainder(91472.9   *T, 360.0)); // corrective terms for Jupiter' moons, Table 10.10
+				planetCorrections.J2 =(M_PI/180.)*( 24.62    +remainder(45137.2   *T, 360.0));
+				planetCorrections.J3 =(M_PI/180.)*(283.90    +remainder( 4850.7   *T, 360.0));
+				planetCorrections.J4 =(M_PI/180.)*(355.80    +remainder( 1191.3   *T, 360.0));
+				planetCorrections.J5 =(M_PI/180.)*(119.90    +remainder(  262.1   *T, 360.0));
+				planetCorrections.J6 =(M_PI/180.)*(229.80    +remainder(   64.3   *T, 360.0));
+				planetCorrections.J7 =(M_PI/180.)*(352.25    +remainder( 2382.6   *T, 360.0));
+				planetCorrections.J8 =(M_PI/180.)*(113.35    +remainder( 6070.0   *T, 360.0));
 			}
 			break;
-		case 6:
+		case Saturn:
 			if (fabs(JDE-planetCorrections.JDE_S)>0.025) // large changes in the values below :-(
 			{
 				planetCorrections.JDE_S=JDE; // keep record of when these values are valid.
-				//planetCorrections.S1=(M_PI/180.)*(353.32+75706.7*T); // corrective terms for Saturn's moons, Table 10.12
-				//planetCorrections.S2=(M_PI/180.)*( 28.72+75706.7*T);
-				planetCorrections.S3=(M_PI/180.)*(177.40-36505.5*T);
-				planetCorrections.S4=(M_PI/180.)*(300.00- 7225.9*T);
-				planetCorrections.S5=(M_PI/180.)*(316.45+  506.2*T);
-				planetCorrections.S6=(M_PI/180.)*(345.20- 1016.3*T);
+				planetCorrections.S1=(M_PI/180.)*(353.32+remainder( 75706.7*T, 360.0)); // corrective terms for Saturn's moons, Table 10.12
+				planetCorrections.S2=(M_PI/180.)*( 28.72+remainder( 75706.7*T, 360.0));
+				planetCorrections.S3=(M_PI/180.)*(177.40+remainder(-36505.5*T, 360.0));
+				planetCorrections.S4=(M_PI/180.)*(300.00+remainder( -7225.9*T, 360.0));
+				planetCorrections.S5=(M_PI/180.)*(316.45+remainder(   506.2*T, 360.0));
+				planetCorrections.S6=(M_PI/180.)*(345.20+remainder( -1016.3*T, 360.0));
 			}
 			break;
-		case 7:
+		case Uranus:
 			if (fabs(JDE-planetCorrections.JDE_U)>0.025) // large changes in the values below :-(
 			{
 				planetCorrections.JDE_U=JDE; // keep record of when these values are valid.
-				//planetCorrections.U1 =(M_PI/180.)*(115.75+54991.87*T); // corrective terms for Uranus's moons, Table 10.14.
-				//planetCorrections.U2 =(M_PI/180.)*(141.69+41887.66*T);
-				//planetCorrections.U3 =(M_PI/180.)*(135.03+29927.35*T);
-				//planetCorrections.U4 =(M_PI/180.)*( 61.77+25733.59*T);
-				//planetCorrections.U5 =(M_PI/180.)*(249.32+24471.46*T);
-				//planetCorrections.U6 =(M_PI/180.)*( 43.86+22278.41*T);
-				//planetCorrections.U7 =(M_PI/180.)*( 77.66+20289.42*T);
-				//planetCorrections.U8 =(M_PI/180.)*(157.36+16652.76*T);
-				//planetCorrections.U9 =(M_PI/180.)*(101.81+12872.63*T);
-				//planetCorrections.U10=(M_PI/180.)*(138.64+ 8061.81*T);
-				planetCorrections.U11=(M_PI/180.)*(102.23- 2024.22*T);
-				planetCorrections.U12=(M_PI/180.)*(316.41+ 2863.96*T);
-				planetCorrections.U13=(M_PI/180.)*(304.01-   51.94*T);
-				planetCorrections.U14=(M_PI/180.)*(308.71-   93.17*T);
-				planetCorrections.U15=(M_PI/180.)*(340.82-   75.32*T);
-				planetCorrections.U16=(M_PI/180.)*(259.14-  504.81*T);
+				planetCorrections.U1 =(M_PI/180.)*(115.75+remainder(54991.87*T, 360.0)); // corrective terms for Uranus's moons, Table 10.14.
+				planetCorrections.U2 =(M_PI/180.)*(141.69+remainder(41887.66*T, 360.0));
+				//planetCorrections.U3 =(M_PI/180.)*(135.03+remainder(29927.35*T, 360.0));
+				planetCorrections.U4 =(M_PI/180.)*( 61.77+remainder(25733.59*T, 360.0));
+				planetCorrections.U5 =(M_PI/180.)*(249.32+remainder(24471.46*T, 360.0));
+				planetCorrections.U6 =(M_PI/180.)*( 43.86+remainder(22278.41*T, 360.0));
+				//planetCorrections.U7 =(M_PI/180.)*( 77.66+remainder(20289.42*T, 360.0));
+				//planetCorrections.U8 =(M_PI/180.)*(157.36+remainder(16652.76*T, 360.0));
+				//planetCorrections.U9 =(M_PI/180.)*(101.81+remainder(12872.63*T, 360.0));
+				//planetCorrections.U10=(M_PI/180.)*(138.64+remainder( 8061.81*T, 360.0));
+				planetCorrections.U11=(M_PI/180.)*(102.23+remainder(-2024.22*T, 360.0));
+				planetCorrections.U12=(M_PI/180.)*(316.41+remainder( 2863.96*T, 360.0));
+				planetCorrections.U13=(M_PI/180.)*(304.01+remainder(  -51.94*T, 360.0));
+				planetCorrections.U14=(M_PI/180.)*(308.71+remainder(  -93.17*T, 360.0));
+				planetCorrections.U15=(M_PI/180.)*(340.82+remainder(  -75.32*T, 360.0));
+				planetCorrections.U16=(M_PI/180.)*(259.14+remainder( -504.81*T, 360.0));
 			}
 			break;
-		case 8:
+		case Neptune:
 			if (fabs(JDE-planetCorrections.JDE_N)>0.025) // large changes in the values below :-(
 			{
 				planetCorrections.JDE_N=JDE; // keep record of when these values are valid.
-				planetCorrections.Na=(M_PI/180.)*(357.85+52.316*T); // Neptune axis term
-				planetCorrections.N1=(M_PI/180.)*(323.92+62606.6*T); // corrective terms for Neptune's moons, Table 10.15 (N=Na!)
-				planetCorrections.N2=(M_PI/180.)*(220.51+55064.2*T);
-				planetCorrections.N3=(M_PI/180.)*(354.27+46564.5*T);
-				planetCorrections.N4=(M_PI/180.)*( 75.31+26109.4*T);
-				planetCorrections.N5=(M_PI/180.)*( 35.36+14325.4*T);
-				planetCorrections.N6=(M_PI/180.)*(142.61+ 2824.6*T);
-				planetCorrections.N7=(M_PI/180.)*(177.85+   52.316*T);
+				planetCorrections.Na=(M_PI/180.)*(357.85+remainder(   52.316*T, 360.0)); // Neptune axis term
+				planetCorrections.N1=(M_PI/180.)*(323.92+remainder(62606.6*T, 360.0)); // corrective terms for Neptune's moons, Table 10.15 (N=Na!)
+				planetCorrections.N2=(M_PI/180.)*(220.51+remainder(55064.2*T, 360.0));
+				planetCorrections.N3=(M_PI/180.)*(354.27+remainder(46564.5*T, 360.0));
+				planetCorrections.N4=(M_PI/180.)*( 75.31+remainder(26109.4*T, 360.0));
+				planetCorrections.N5=(M_PI/180.)*( 35.36+remainder(14325.4*T, 360.0));
+				planetCorrections.N6=(M_PI/180.)*(142.61+remainder( 2824.6*T, 360.0));
+				planetCorrections.N7=(M_PI/180.)*(177.85+remainder(   52.316*T, 360.0));
 			}
 			break;
 		default:

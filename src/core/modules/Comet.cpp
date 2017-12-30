@@ -86,8 +86,7 @@ Comet::Comet(const QString& englishName,
 		  false, //No atmosphere
 		  true, //halo
 		  pTypeStr),
-	  slopeParameter(-10.f), // -10 == uninitialized: used in getVMagnitude() TODO: CHECK AFTER REBASE!
-	  semiMajorAxis(0.),     // TODO: CHECK AFTER REBASE!
+	  slopeParameter(-10.f), // -10 == uninitialized: used in getVMagnitude()
 	  isCometFragment(false),
 	  nameIsProvisionalDesignation(false),
 	  tailFactors(-1., -1.), // mark "invalid"
