@@ -497,7 +497,6 @@ void get_jupiter_axis_rot(const double jde, double *raDeg, double *decDeg, doubl
 	*rotDeg1 =  67.1  + 877.900*d;
 	*rotDeg3 =  43.3  + 870.270*d;
 	*rotDeg3 = 284.95 + 870.5360000*d;
-
 }
 
 void get_neptune_axis_rot(const double jde, double *raDeg, double *decDeg, double *rotDeg)
@@ -959,7 +958,6 @@ void get_triton_axis_rot(const double jde, double *raDeg, double *decDeg, double
 		+ 2.05*sin(3.0*Nrot[7]) + 0.74*sin(4.0*Nrot[7]) + 0.28*sin(5.0*Nrot[7])
 		+ 0.11*sin(6.0*Nrot[7]) + 0.05*sin(7.0*Nrot[7]) + 0.02*sin(8.0*Nrot[7])
 		+ 0.01*sin(9.0*Nrot[7]);
-
 }
 #endif
 

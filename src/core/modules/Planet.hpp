@@ -97,11 +97,11 @@ public:
 	RotationElements(void) : period(1.), offset(0.), epoch(J2000), obliquity(0.), ascendingNode(0.), //precessionRate(0.),
 		siderealPeriod(0.),
 		useICRF(false), ra0(0.), ra1(0.), de0(0.), de1(0.), W0(0.), W1(0.) {}
-	float period;          // (sidereal) rotation period [earth days]   CURRENTLY NOT:  If useICRF, this is from the time term of W.
-	float offset;          // rotation at epoch  [degrees]              CURRENTLY NOT:  If useICRF, this is the constant term of W
+	double period;          // (sidereal) rotation period [earth days]   CURRENTLY NOT:  If useICRF, this is from the time term of W.
+	double offset;          // rotation at epoch  [degrees]              CURRENTLY NOT:  If useICRF, this is the constant term of W
 	double epoch;          // JDE (JD TT) of epoch for these elements
-	float obliquity;       // tilt of rotation axis w.r.t. ecliptic [radians]
-	float ascendingNode;   // long. of ascending node of equator on the ecliptic [radians]
+	double obliquity;       // tilt of rotation axis w.r.t. ecliptic [radians]
+	double ascendingNode;   // long. of ascending node of equator on the ecliptic [radians]
 	// Field rot_precession_rate in ssystem.ini is no longer used. We still keep Earth's value as it is evaluated in older versions (until 0.13.*).
 //	float precessionRate;  // rate of precession of rotation axis in [rads/JulianCentury(36525d)] [ NO LONGER USED WITH 0.14 (was used for Earth only, and that was too simple.) ]
 	double siderealPeriod; // sidereal period (Planet year or a moon's sidereal month) [earth days]
@@ -345,14 +345,11 @@ public:
 	// _w0, _w1 to be given in degrees!
 	// _precessionRate [rad/JulCt] (was only given for earth, and is no longer used!)
 	// _siderealPeriod [earth days] orbital duration. THIS DOES NOT BELONG HERE!
-	void setRotationElements(const float _period, const float _offset, const double _epoch,
-				 const float _obliquity, const float _ascendingNode,
-				 const double _ra0,
-				 const double _ra1,
-				 const double _de0,
-				 const double _de1,
-				 const double _w0,
-				 const double _w1,
+	void setRotationElements(const double _period, const double _offset, const double _epoch,
+				 const double _obliquity, const double _ascendingNode,
+				 const double _ra0, const double _ra1,
+				 const double _de0, const double _de1,
+				 const double _w0,  const double _w1,
 				 //float _precessionRate,
 				 const double _siderealPeriod);
 	double getRotAscendingNode(void) const {return static_cast<double>(re.ascendingNode);}
@@ -685,7 +682,7 @@ protected:
 	static int customGrsLongitude;		// Longitude of Great Red Spot (System II, degrees)
 	static double customGrsDrift;		// Annual drift of Great Red Spot position (degrees)
 	
-	// 0.18: Axes of planets and moons require terms depending on T=(jde-J2000)/36525, described in Explanatory Supplement 2013, Tables 10.1 and 10.10-14.
+	// 0.20: Axes of planets and moons require terms depending on T=(jde-J2000)/36525, described in Explanatory Supplement 2013, Tables 10.1 and 10.10-14.
 	// Others require frequent updates, depending on jde-J2000. (Moon etc.)
 	// These should be updated as frequently as needed, optimally with the planet. Light time correction should be applied when needed.
 	// best place to call update is the SolarSystem::computePlanets()
@@ -731,14 +728,14 @@ protected:
 		double S6;
 		double U1; // for Cordelia // corrective terms for Uranus's moons, Table 10.14.
 		double U2; // for Ophelia
-		//double U3; // for Bianca   (not in 0.18)
+		//double U3; // for Bianca   (not in 0.20)
 		double U4; // for Cressida
 		double U5; // for Desdemona
 		double U6; // for Juliet
-		//double U7; // for Portia   (not in 0.18)
-		//double U8; // for Rosalind (not in 0.18)
-		//double U9; // for Belinda  (not in 0.18)
-		//double U10; // for Puck    (not in 0.18)
+		//double U7; // for Portia   (not in 0.20)
+		//double U8; // for Rosalind (not in 0.20)
+		//double U9; // for Belinda  (not in 0.20)
+		//double U10; // for Puck    (not in 0.20)
 		double U11;
 		double U12;
 		double U13;
