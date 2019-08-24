@@ -352,7 +352,7 @@ public:
 				 const double _w0,  const double _w1,
 				 //float _precessionRate,
 				 const double _siderealPeriod);
-	double getRotAscendingNode(void) const {return static_cast<double>(re.ascendingNode);}
+	double getRotAscendingNode(void) const {return re.ascendingNode; }
 	// return angle between axis and normal of ecliptic plane (or, for a moon, equatorial/reference plane defined by parent).
 	// For Earth, this is the angle between axis and normal to current ecliptic of date, i.e. the ecliptic obliquity of date JDE.
 	// TODO: decide if this is always angle between axis and J2000 ecliptic, or should be axis//current ecliptic!

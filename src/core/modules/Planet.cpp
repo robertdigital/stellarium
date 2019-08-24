@@ -29,6 +29,7 @@
 #include "Orbit.hpp"
 #include "planetsephems/precession.h"
 #include "planetsephems/EphemWrapper.hpp"
+#include "planetsephems/moonphys.h"
 #include "StelObserver.hpp"
 #include "StelProjector.hpp"
 #include "sidereal_time.h"
@@ -549,6 +550,7 @@ QString Planet::getInfoString(const StelCore* core, const InfoStringGroup& flags
 			.arg(QString::number(rotLocalToParent[13], 'f', 7))
 			.arg(QString::number(rotLocalToParent[14], 'f', 7))
 			.arg(QString::number(rotLocalToParent[15], 'f', 7)) << "<br>";
+		oss << QString("DEBUG: Planet using %1 axis computation<br>").arg(re.useICRF?"new":"old");
 	}
 //#endif
 
@@ -750,43 +752,102 @@ QString Planet::getInfoString(const StelCore* core, const InfoStringGroup& flags
 			{
 				// For compute the Moon age we use geocentric coordinates
 				QString moonPhase = "";
-				double eclJDE = earth->getRotObliquity(core->getJDE());
-				double ra_equ, dec_equ, lambdaMoon, lambdaSun, beta;
-				StelCore* core1 = StelApp::getInstance().getCore();
-				bool state = core1->getUseTopocentricCoordinates();
+				StelCore* core1 = StelApp::getInstance().getCore(); // FIXME: Why do we need a different reference to the (singular) core here?
+				const double eclJDE = earth->getRotObliquity(core1->getJDE());
+				double ra_equ, dec_equ, lambdaMoon, lambdaSun, betaMoon, betaSun, raSun, deSun;
+				const bool state = core1->getUseTopocentricCoordinates();
 				core1->setUseTopocentricCoordinates(false);
 				core1->update(0); // enforce update cache to avoid error in computation!
 				StelUtils::rectToSphe(&ra_equ,&dec_equ, getEquinoxEquatorialPos(core1));
-				StelUtils::equToEcl(ra_equ, dec_equ, eclJDE, &lambdaMoon, &beta);
-				StelUtils::rectToSphe(&ra_equ,&dec_equ, ssystem->getSun()->getEquinoxEquatorialPos(core1));
-				StelUtils::equToEcl(ra_equ, dec_equ, eclJDE, &lambdaSun, &beta);
-				double deltaLong = (lambdaMoon - lambdaSun)*M_180_PI;
+				StelUtils::equToEcl(ra_equ, dec_equ, eclJDE, &lambdaMoon, &betaMoon);
+				StelUtils::rectToSphe(&raSun,&deSun, ssystem->getSun()->getEquinoxEquatorialPos(core1));
+				StelUtils::equToEcl(raSun, deSun, eclJDE, &lambdaSun, &betaSun);
 				core1->setUseTopocentricCoordinates(state);
 				core1->update(0); // enforce update cache for avoid odd selection of Moon details!
+				double deltaLong = (lambdaMoon-lambdaSun)*M_180_PI;
 				if (deltaLong<0.) deltaLong += 360.;
-				int deltaLongI = qRound(deltaLong);
-				if (deltaLongI==45)
-					moonPhase = qc_("Waxing Crescent", "Moon phase");
-				if (deltaLongI==90)
-					moonPhase = qc_("First Quarter", "Moon phase");
-				if (deltaLongI==135)
-					moonPhase = qc_("Waxing Gibbous", "Moon phase");
-				if (deltaLongI==180)
-					moonPhase = qc_("Full Moon", "Moon phase");
-				if (deltaLongI==225)
-					moonPhase = qc_("Waning Gibbous", "Moon phase");
-				if (deltaLongI==270)
-					moonPhase = qc_("Third Quarter", "Moon phase");
-				if (deltaLongI==315)
-					moonPhase = qc_("Waning Crescent", "Moon phase");
+				const int deltaLongI = static_cast<int>(std::round(deltaLong));
 				if (deltaLongI==0 || deltaLongI==360)
 					moonPhase = qc_("New Moon", "Moon phase");
+				else if (deltaLongI<90)
+					moonPhase = qc_("Waxing Crescent", "Moon phase");
+				else if (deltaLongI==90)
+					moonPhase = qc_("First Quarter", "Moon phase");
+				else if (deltaLongI<180)
+					moonPhase = qc_("Waxing Gibbous", "Moon phase");
+				else if (deltaLongI==180)
+					moonPhase = qc_("Full Moon", "Moon phase");
+				else if (deltaLongI<270)
+					moonPhase = qc_("Waning Gibbous", "Moon phase");
+				else if (deltaLongI==270)
+					moonPhase = qc_("Third Quarter", "Moon phase");
+				else if (deltaLongI<360)
+					moonPhase = qc_("Waning Crescent", "Moon phase");
+				else
+					moonPhase = qc_("ERROR IN PHASE STRING PROGRAMMING!", "Moon phase");
 
-				double age = deltaLong*29.530588853/360.;
+				const double age = deltaLong*29.530588853/360.;
 				oss << QString("%1: %2 %3").arg(q_("Moon age"), QString::number(age, 'f', 1), q_("days old"));
 				if (!moonPhase.isEmpty())
 					oss << QString(" (%4)").arg(moonPhase);
 				oss << "<br />";
+
+				// we must repeat the position lookup from above in case we have topocentric corrections.
+				StelUtils::rectToSphe(&ra_equ,&dec_equ, getEquinoxEquatorialPos(core));
+				StelUtils::equToEcl(ra_equ, dec_equ, eclJDE, &lambdaMoon, &betaMoon);
+				StelUtils::rectToSphe(&raSun,&deSun, ssystem->getSun()->getEquinoxEquatorialPos(core));
+				StelUtils::equToEcl(raSun, deSun, eclJDE, &lambdaSun, &betaSun);
+				const double chi=atan2(cos(deSun)*sin(raSun-ra_equ), sin(deSun)*cos(dec_equ)-cos(deSun)*sin(dec_equ)*cos(raSun-ra_equ));
+				oss << QString("%1: %2").arg(q_("PA of bright limb"), StelUtils::radToDecDegStr(StelUtils::fmodpos(chi, M_PI*2.0))) << "<br/>";
+
+
+				// Everything around libration:
+				const double jde=core->getJDE();
+				const double T=(jde-2451545.0)/36525.0;
+				double Lp, D, M, Mp, E, F, Omega, lBogus, bBogus, rBogus;
+				computeMoonAngles(core->getJDE(), &Lp, &D, &M, &Mp, &E, &F, &Omega, &lBogus, &bBogus, &rBogus, true);
+				oss << QString("DEBUG: L'=%1, D=%2, M=%3, M'=%4, E=%5, F=%6, &Omega;=%7, &lambda;=%8, &beta;=%9, &Delta;=%10<br/>")
+				       .arg(StelUtils::radToDecDegStr(StelUtils::fmodpos(Lp, M_PI*2.0)))
+				       .arg(StelUtils::radToDecDegStr(StelUtils::fmodpos(D, M_PI*2.0)))
+				       .arg(StelUtils::radToDecDegStr(StelUtils::fmodpos(M, M_PI*2.0)))
+				       .arg(StelUtils::radToDecDegStr(StelUtils::fmodpos(Mp, M_PI*2.0)))
+				       .arg(QString::number(E))
+				       .arg(StelUtils::radToDecDegStr(StelUtils::fmodpos(F, M_PI*2.0)))
+				       .arg(StelUtils::radToDecDegStr(StelUtils::fmodpos(Omega, M_PI*2.0)))
+				       .arg(StelUtils::radToDecDegStr(StelUtils::fmodpos(lambdaMoon, M_PI*2.0)))
+				       .arg(StelUtils::radToDecDegStr(betaMoon))
+				       .arg(QString::number(rBogus));
+				double dPsi, dEps;
+				getNutationAngles(jde, &dPsi, &dEps);
+				double W, lp, bp, lpp, bpp, PA;
+				computeLibrations(T, M, Mp, D, E, F, Omega, lambdaMoon, dPsi, betaMoon, ra_equ, eclJDE, &W, &lp, &bp, &lpp, &bpp, &PA);
+				oss << QString("DEBUG: &Delta;&psi;=%1, &Delta;&epsilon;=%2, W=%3, l'=%4, b'=%5, l''=%6, b''=%7, P=%8<br/>")
+				       .arg(StelUtils::radToDecDegStr(dPsi))
+				       .arg(StelUtils::radToDecDegStr(dEps))
+				       .arg(StelUtils::radToDecDegStr(StelUtils::fmodpos(W, M_PI*2.0)))
+				       .arg(StelUtils::radToDecDegStr(fmod(lp, M_PI*2.0)))
+				       .arg(StelUtils::radToDecDegStr(bp))
+				       .arg(StelUtils::radToDecDegStr(fmod(lpp, M_PI*2.0)))
+				       .arg(StelUtils::radToDecDegStr(bpp))
+				       .arg(StelUtils::radToDecDegStr(StelUtils::fmodpos(PA, M_PI*2.0)));
+
+				// Repeat for selenographic position of the sun:
+				double wBogus, lop, bop, lopp, bopp, paBogus, lambdaH, betaH;
+				const Vec3d hcMoon=getHeliocentricEclipticPos();
+				StelUtils::rectToSphe(&lambdaH, &betaH, hcMoon);
+				computeLibrations(T, M, Mp, D, E, F, Omega, lambdaH, dPsi, betaH, raSun, eclJDE, &wBogus, &lop, &bop, &lopp, &bopp, &paBogus);
+				oss << QString("DEBUG: l<sub>0</sub>'=%1, b<sub>0</sub>'=%2, l<sub>0</sub>''=%3, b<sub>0</sub>''=%4<br/>")
+				       .arg(StelUtils::radToDecDegStr(fmod(lop, M_PI*2.0)))
+				       .arg(StelUtils::radToDecDegStr(bop))
+				       .arg(StelUtils::radToDecDegStr(fmod(lopp, M_PI*2.0)))
+				       .arg(StelUtils::radToDecDegStr(bopp));
+
+				double l =fmod(lp+lpp, M_PI*2.0);   if (l>M_PI_2)  l -=2.0*M_PI;
+				double lo=fmod(lop+lopp, M_PI*2.0); if (lo>M_PI_2) lo-=2.0*M_PI;
+				oss << QString("%1: %2/%3").arg(q_("Libration"), StelUtils::radToDecDegStr(l), StelUtils::radToDecDegStr(bp+bpp)) << "<br/>";
+				oss << QString("%1: %2").arg(q_("PA of axis"), StelUtils::radToDmsStr(PA)) << "<br/>";
+				oss << QString("%1: %2/%3").arg(q_("Subsolar point"), StelUtils::radToDecDegStr(lo), StelUtils::radToDecDegStr(bop+bopp)) << "<br/>";
+				oss << QString("%1: %2").arg(q_("Colongitude"), StelUtils::radToDecDegStr(StelUtils::fmodpos(450.0*M_PI_180-lop-lopp, M_PI*2.0))) << "<br/>";
 			}
 		}
 
@@ -861,6 +922,36 @@ QVariantMap Planet::getInfoMap(const StelCore *core) const
 	}
 	map.insert("type", getPlanetTypeString()); // replace existing "type=Planet" by something more detailed.
 
+	if (getEnglishName()=="Moon")
+	{
+		// Everything around libration:
+		const double jde=core->getJDE();
+		const double T=(jde-2451545.0)/36525.0;
+		static SolarSystem *ssystem=GETSTELMODULE(SolarSystem);
+		const double eclJDE = ssystem->getEarth()->getRotObliquity(jde);
+		double raMoon, decMoon, lambdaMoon, betaMoon;
+		StelUtils::rectToSphe(&raMoon,&decMoon, getEquinoxEquatorialPos(core));
+		StelUtils::equToEcl(raMoon, decMoon, eclJDE, &lambdaMoon, &betaMoon);
+		double Lp, D, M, Mp, E, F, Omega, lBogus, bBogus, rBogus;
+		computeMoonAngles(core->getJDE(), &Lp, &D, &M, &Mp, &E, &F, &Omega, &lBogus, &bBogus, &rBogus, false);
+		double dPsi, dEps;
+		getNutationAngles(jde, &dPsi, &dEps);
+		double W, lp, bp, lpp, bpp, PA;
+		computeLibrations(T, M, Mp, D, E, F, Omega, lambdaMoon, dPsi, betaMoon, raMoon, eclJDE, &W, &lp, &bp, &lpp, &bpp, &PA);
+		// Repeat for selenographic position of the sun:
+		double Wbogus, lop, bop, lopp, bopp, PAbogus, lambdaH, betaH;
+		const Vec3d hcMoon=getHeliocentricEclipticPos();
+		StelUtils::rectToSphe(&lambdaH, &betaH, hcMoon);
+		computeLibrations(T, M, Mp, D, E, F, Omega, lambdaH, dPsi, betaH, raMoon, eclJDE, &Wbogus, &lop, &bop, &lopp, &bopp, &PAbogus);
+		double l =fmod(lp+lpp, M_PI*2.0);   if (l>M_PI_2)  l -=2.0*M_PI;
+		double lo=fmod(lop+lopp, M_PI*2.0); if (lo>M_PI_2) lo-=2.0*M_PI;
+		map.insert("libration_l", l*M_180_PI);
+		map.insert("libration_b", (bp+bpp)*M_180_PI);
+		map.insert("pa_axis", PA*M_180_PI);
+		map.insert("subsolar_point_l", lo*M_180_PI);
+		map.insert("subsolar_point_b", (bop+bopp)*M_180_PI);
+		map.insert("colongitude", StelUtils::fmodpos(450.0*M_PI_180-lop-lopp, M_PI*2.0)*M_180_PI);
+	}
 	return map;
 }
 
@@ -1092,12 +1183,11 @@ void Planet::computeTransMatrix(double JD, double JDE)
 		bool retransform=false; // this must be set true on each of these special cases now:
 		double J2000NPoleRA=re.ra0;
 		double J2000NPoleDE=re.de0;
-		if(re.ra1 || re.de1)
+		if((re.ra1!=0.0) || (re.de1!=0.0))
 		{
+			retransform=true;
 			J2000NPoleRA+=re.ra1*T; // these values in radians
 			J2000NPoleDE+=re.de1*T;
-			retransform=true;
-		}
 
 		// Apply detailed corrections from ExplSup2016 and WGCCRE2009. The nesting increases lookup speed.
 		if (englishName=="Moon")
@@ -1130,8 +1220,8 @@ void Planet::computeTransMatrix(double JD, double JDE)
 		}
 		else if (englishName=="Neptune")
 		{
-			J2000NPoleRA+= (0.7 *M_PI/180.)*sin(planetCorrections.Na); // these values in radians
-			J2000NPoleDE-= (0.51*M_PI/180.)*cos(planetCorrections.Na);
+			J2000NPoleRA+= (0.7 *M_PI_180)*sin(planetCorrections.Na); // these values in radians
+			J2000NPoleDE-= (0.51*M_PI_180)*cos(planetCorrections.Na);
 			retransform=true;
 		}
 		else if (englishName=="Phobos")
@@ -1357,7 +1447,7 @@ void Planet::computeTransMatrix(double JD, double JDE)
 				retransform=true;
 			}
 		}
-
+		}
 		if (retransform)
 		{
 			re.currentAxisRA=J2000NPoleRA;
@@ -1382,12 +1472,19 @@ void Planet::computeTransMatrix(double JD, double JDE)
 			// qDebug() << "\tCalculated rotational obliquity: " << rotObliquity*180./M_PI << endl;
 			// qDebug() << "\tCalculated rotational ascending node: " << rotAscNode*180./M_PI << endl;
 			re.obliquity=re_obliquity; // WE NEED THIS AGAIN IN getRotObliquity()
-			//re.ascendingNode=re_ascendingNode;
+			re.ascendingNode=re_ascendingNode;
+			setExtraInfoString(QString("DEBUG: Retransform: Pole in VSOP87 coords: &alpha;=%1, &delta;=%2").arg(StelUtils::radToHmsStr(ra)).arg(StelUtils::radToDmsStr(de)));
+			addToExtraInfoString(QString("DEBUG: new re.obliquity=%1, re.ascendingNode=%2").arg(StelUtils::radToDecDegStr(re.obliquity)).arg(StelUtils::radToDecDegStr(re.ascendingNode)));
+		}
+		else {
+			setExtraInfoString(QString("DEBUG: No retransform. re.obliquity=%1, re.ascendingNode=%2").arg(StelUtils::radToDecDegStr(re.obliquity)).arg(StelUtils::radToDecDegStr(re.ascendingNode)));
+
 		}
 		if (re.useICRF)
 		{
 			// The new model directly gives a matrix into ICRF, which is practically identical and called VSOP87 for us.
 			setRotEquatorialToVsop87(Mat4d::zrotation(re_ascendingNode) * Mat4d::xrotation(re_obliquity));
+			addToExtraInfoString(QString("DEBUG: useICRF: new re.obliquity=%1, re.ascendingNode=%2").arg(StelUtils::radToDecDegStr(re_obliquity)).arg(StelUtils::radToDecDegStr(re_ascendingNode)));
 		}
 		else
 		{
@@ -1397,6 +1494,7 @@ void Planet::computeTransMatrix(double JD, double JDE)
 		//rotLocalToParent = Mat4d::zrotation(re.ascendingNode - re.precessionRate*(JDE-re.epoch)) * Mat4d::xrotation(re.obliquity);
 		rotLocalToParent = Mat4d::zrotation(re_ascendingNode) * Mat4d::xrotation(re_obliquity);
 		//qDebug() << "Planet" << englishName << ": computeTransMatrix() setting old-style rotLocalToParent.";
+		addToExtraInfoString(QString("DEBUG: OLDSTYLE: new re.obliquity=%1, re.ascendingNode=%2").arg(StelUtils::radToDecDegStr(re_obliquity)).arg(StelUtils::radToDecDegStr(re_ascendingNode)));
 		}
 	}
 }
@@ -1457,11 +1555,11 @@ double Planet::getSiderealTime(double JD, double JDE) const
 		}
 		else if (englishName=="Mercury")
 		{
-			const double M1=(174.791086*M_PI/180.0) + remainder(( 4.092335*M_PI/180.0)*t, 2.0*M_PI);
-			const double M2=(349.582171*M_PI/180.0) + remainder(( 8.184670*M_PI/180.0)*t, 2.0*M_PI);
-			const double M3=(164.373257*M_PI/180.0) + remainder((12.277005*M_PI/180.0)*t, 2.0*M_PI);
-			const double M4=(339.164343*M_PI/180.0) + remainder((16.369340*M_PI/180.0)*t, 2.0*M_PI);
-			const double M5=(153.955429*M_PI/180.0) + remainder((20.461675*M_PI/180.0)*t, 2.0*M_PI);
+			const double M1=(174.791086*M_PI_180) + remainder(( 4.092335*M_PI_180)*t, 2.0*M_PI);
+			const double M2=(349.582171*M_PI_180) + remainder(( 8.184670*M_PI_180)*t, 2.0*M_PI);
+			const double M3=(164.373257*M_PI_180) + remainder((12.277005*M_PI_180)*t, 2.0*M_PI);
+			const double M4=(339.164343*M_PI_180) + remainder((16.369340*M_PI_180)*t, 2.0*M_PI);
+			const double M5=(153.955429*M_PI_180) + remainder((20.461675*M_PI_180)*t, 2.0*M_PI);
 
 			w += (-0.00000535)*sin(M5) - (0.00002364)*sin(M4) - (0.00010280)*sin(M3) - (0.00104581)*sin(M2) + (0.00993822)*sin(M1);
 		}
@@ -1474,13 +1572,13 @@ double Planet::getSiderealTime(double JD, double JDE) const
 		}
 		if (englishName=="Phobos")
 		{
-			const double M1=(169.51*M_PI/180.0) - (0.4357640*M_PI/180.0)*t;
-			const double M2=(192.93*M_PI/180.0) + (1128.4096700*M_PI/180.0)*t +(8.864*M_PI/180.0)*T*T;
+			const double M1=(169.51*M_PI_180) - (0.4357640*M_PI_180)*t;
+			const double M2=(192.93*M_PI_180) + (1128.4096700*M_PI_180)*t +(8.864*M_PI_180)*T*T;
 			w+=  (8.864)*T*T - (1.42)*sin(M1) - (0.78)*sin(M2);
 		}
 		if (englishName=="Deimos")
 		{
-			const double M3=(53.47*M_PI/180.0) - (0.0181510*M_PI/180.0)*t;
+			const double M3=(53.47*M_PI_180) - (0.0181510*M_PI_180)*t;
 			w+=  (-0.520)*T*T - (2.58)*sin(M3) + (0.19)*sin(M3);
 		}
 		else if (parent->englishName=="Jupiter")
@@ -1696,8 +1794,8 @@ double Planet::getMeanSolarDay() const
 		return 1.;
 	}
 
-	double sday = getSiderealDay();
-	double coeff = qAbs(sday/getSiderealPeriod());
+	const double sday = getSiderealDay();
+	const double coeff = qAbs(sday/getSiderealPeriod());
 	double sign = 1.;
 	// planets with retrograde rotation
 	if (englishName=="Venus" || englishName=="Uranus" || englishName=="Pluto")
@@ -1706,7 +1804,7 @@ double Planet::getMeanSolarDay() const
 	if (pType==Planet::isMoon)
 	{
 		// duration of mean solar day on moon are same as synodic month on this moon
-		double a = parent->getSiderealPeriod()/sday;
+		const double a = parent->getSiderealPeriod()/sday;
 		msd = sday*(a/(a-1));
 	}
 	else
@@ -2082,7 +2180,6 @@ float Planet::getVMagnitude(const StelCore* core) const
 
 				break;
 			}
-
 			case Mueller_1893:
 			{
 				// (1)
@@ -2783,11 +2880,11 @@ void Planet::draw3dModel(StelCore* core, StelProjector::ModelViewTranformP trans
 		// Set the main source of light to be the sun
 		Vec3d sunPos(0.);
 		core->getHeliocentricEclipticModelViewTransform()->forward(sunPos);
-		light.position=Vec4d(sunPos);
+		light.position=sunPos;
 
 		// Set the light parameters taking sun as the light source
-		light.diffuse = Vec4f(1.f,static_cast<float>(magFactorGreen)*1.f,static_cast<float>(magFactorBlue)*1.f);
-		light.ambient = Vec4f(0.02f,static_cast<float>(magFactorGreen)*0.02f,static_cast<float>(magFactorBlue)*0.02f);
+		light.diffuse.set(1.f,static_cast<float>(magFactorGreen)*1.f,static_cast<float>(magFactorBlue)*1.f);
+		light.ambient.set(0.02f,static_cast<float>(magFactorGreen)*0.02f,static_cast<float>(magFactorBlue)*0.02f);
 
 		if (this==ssm->getMoon())
 		{
@@ -2798,7 +2895,7 @@ void Planet::draw3dModel(StelCore* core, StelProjector::ModelViewTranformP trans
 			// When atm.brightness has fallen to 2000cd/m^2, we allow ashen light to appear visible. Its impact is full when atm.brightness is below 1000.
 			LandscapeMgr* lmgr = GETSTELMODULE(LandscapeMgr);
 			Q_ASSERT(lmgr);
-			double atmLum=(lmgr->getFlagAtmosphere() ? static_cast<double>(lmgr->getAtmosphereAverageLuminance()) : 0.0);
+			const double atmLum=(lmgr->getFlagAtmosphere() ? static_cast<double>(lmgr->getAtmosphereAverageLuminance()) : 0.0);
 			if (atmLum<2000.0)
 			{
 				double atmScaling=1.0 - (qMax(1000.0, atmLum)-1000.0)*0.001; // full impact when atmLum<1000.
@@ -2814,7 +2911,7 @@ void Planet::draw3dModel(StelCore* core, StelProjector::ModelViewTranformP trans
 				fovFactor -= 0.1*static_cast<double>(5.0f-qMax(2.0f, fov));
 			}
 			// Special case for the Moon. Was 1.6, but this often is too bright.
-			light.diffuse = Vec4f(static_cast<float>(fovFactor),static_cast<float>(magFactorGreen*fovFactor),static_cast<float>(magFactorBlue*fovFactor),1.f);
+			light.diffuse.set(static_cast<float>(fovFactor),static_cast<float>(magFactorGreen*fovFactor),static_cast<float>(magFactorBlue*fovFactor));
 		}
 /* GZ This may be remains of a "lighting=false" condition that was possible before 0.16.
  * I think it can be deleted, given that lighting is always true now...
@@ -2877,7 +2974,7 @@ void Planet::draw3dModel(StelCore* core, StelProjector::ModelViewTranformP trans
 	{
 		// Prepare openGL lighting parameters according to luminance
 		float surfArcMin2 = static_cast<float>(getSpheroidAngularSize(core))*60.f;
-		surfArcMin2 = surfArcMin2*surfArcMin2*static_cast<float>(M_PI); // the total illuminated area in arcmin^2
+		surfArcMin2 = surfArcMin2*surfArcMin2*M_PIf; // the total illuminated area in arcmin^2
 
 		StelPainter sPainter(core->getProjection(StelCore::FrameJ2000));
 		Vec3d tmp = getJ2000EquatorialPos(core);
@@ -2942,7 +3039,7 @@ void sSphere(Planet3DModel* model, const float radius, const float oneMinusOblat
 	const float *cos_sin_theta_p;
 
 	// texturing: s goes from 0.0/0.25/0.5/0.75/1.0 at +y/+x/-y/-x/+y axis
-	// t goes from -1.0/+1.0 at z = -radius/+radius (linear along longitudes)
+	// t goes from 0.0/+1.0 at z = -radius/+radius (linear along longitudes)
 	// cannot use triangle fan on texturing (s coord. at top/bottom tip varies)
 	// If the texture is flipped, we iterate the coordinates backward.
 	const GLfloat ds = 1.f / slices;
