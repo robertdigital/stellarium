@@ -533,7 +533,6 @@ bool SolarSystem::loadPlanets(const QString& filePath)
 {
 	StelSkyDrawer* skyDrawer = StelApp::getInstance().getCore()->getSkyDrawer();
 	qDebug() << "Loading from :"  << filePath;
-	int readOk = 0;
 	QSettings pd(filePath, StelIniFormat);
 	if (pd.status() != QSettings::NoError)
 	{
@@ -623,7 +622,7 @@ bool SolarSystem::loadPlanets(const QString& filePath)
 	// qDebug() << orderedSections;
 
 	// Stage 3 (as described above).
-	//int readOk=0;
+	int readOk=0;
 	//int totalPlanets=0;
 
 	// qDebug() << "Adding " << orderedSections.size() << "objects...";

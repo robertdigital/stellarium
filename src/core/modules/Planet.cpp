@@ -753,11 +753,11 @@ QString Planet::getInfoString(const StelCore* core, const InfoStringGroup& flags
 				// For compute the Moon age we use geocentric coordinates
 				QString moonPhase = "";
 				StelCore* core1 = StelApp::getInstance().getCore(); // FIXME: Why do we need a different reference to the (singular) core here?
-				const double eclJDE = earth->getRotObliquity(core1->getJDE());
-				double ra_equ, dec_equ, lambdaMoon, lambdaSun, betaMoon, betaSun, raSun, deSun;
 				const bool state = core1->getUseTopocentricCoordinates();
 				core1->setUseTopocentricCoordinates(false);
-				core1->update(0); // enforce update cache to avoid error in computation!
+				core1->update(0); // enforce update cache!
+				const double eclJDE = earth->getRotObliquity(core1->getJDE());
+				double ra_equ, dec_equ, lambdaMoon, lambdaSun, betaMoon, betaSun, raSun, deSun;
 				StelUtils::rectToSphe(&ra_equ,&dec_equ, getEquinoxEquatorialPos(core1));
 				StelUtils::equToEcl(ra_equ, dec_equ, eclJDE, &lambdaMoon, &betaMoon);
 				StelUtils::rectToSphe(&raSun,&deSun, ssystem->getSun()->getEquinoxEquatorialPos(core1));
@@ -952,6 +952,7 @@ QVariantMap Planet::getInfoMap(const StelCore *core) const
 		map.insert("subsolar_point_b", (bop+bopp)*M_180_PI);
 		map.insert("colongitude", StelUtils::fmodpos(450.0*M_PI_180-lop-lopp, M_PI*2.0)*M_180_PI);
 	}
+
 	return map;
 }
 
