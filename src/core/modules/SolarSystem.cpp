@@ -764,7 +764,7 @@ bool SolarSystem::loadPlanets(const QString& filePath)
 			// Create a Keplerian orbit. This has been called CometOrbit before 0.20.
 			KeplerOrbit *orb = new KeplerOrbit(pericenterDistance,     // [AU]
 								   eccentricity,           // 0..>1, but practically only 0..1
-								   pd.value(secname+"/orbit_Inclination", 0.0).toDouble()*(M_PI/180.0), // [radians]
+								   inclination,            // [radians]
 								   ascending_node,         // [radians]
 								   arg_of_pericenter,      // [radians]
 								   time_at_pericenter,     // JD
@@ -884,7 +884,7 @@ bool SolarSystem::loadPlanets(const QString& filePath)
 				mp->setAbsoluteMagnitudeAndSlope(magnitude, qBound(0.0f, slope, 1.0f));
 			}
 
-			mp->setColorIndexBV(static_cast<float>(bV));
+			mp->setColorIndexBV(bV);
 			mp->setSpectralType(pd.value(secname+"/spec_t", "").toString(), pd.value(secname+"/spec_b", "").toString());
 			if (semi_major_axis>0)
 				mp->deltaJDE = 2.0*semi_major_axis*StelCore::JD_SECOND;

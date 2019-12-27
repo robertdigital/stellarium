@@ -38,7 +38,8 @@ typedef void (*posFuncType)(double, double*, double*, void*);
 
 // GZ2016: new axis functions for external computation of axis orientations for selected objects.
 // The last variable is a pointer to the Planet object.
-typedef void (*axisFuncType)(double, double*, void*);
+// FIXME: Do we need this now in 2020?
+//typedef void (*axisFuncType)(double, double*, void*);
 
 typedef void (OsculatingFunctType)(double jde0,double jde,double xyz[3], double xyzdot[3]);
 
@@ -632,7 +633,7 @@ protected:
 					 // Apparently this is the axis orientation with respect to the parent body. For planets, this is axis orientation w.r.t. VSOP87A/J2000 ecliptical system.
 	float axisRotation;              // Rotation angle of the Planet on its axis, degrees.
 					 // For Earth, this should be Greenwich Mean Sidereal Time GMST.
-					 // For V0.18+, and for planets computed after the IAU2009 paper this is angle W (rotDeg),
+					 // For V0.20+, and for planets computed after the IAU2009 paper this is angle W (rotDeg),
 					 // i.e. angle between ascending node of body equator w.r.t. ICRF equator and its prime meridian.
 	StelTextureSP texMap;            // Planet map texture
 	StelTextureSP normalMap;         // Planet normal map texture
@@ -681,7 +682,7 @@ protected:
 	static double customGrsJD;		// Initial JD for calculation of position of Great Red Spot
 	static int customGrsLongitude;		// Longitude of Great Red Spot (System II, degrees)
 	static double customGrsDrift;		// Annual drift of Great Red Spot position (degrees)
-	
+
 	// 0.20: Axes of planets and moons require terms depending on T=(jde-J2000)/36525, described in Explanatory Supplement 2013, Tables 10.1 and 10.10-14.
 	// Others require frequent updates, depending on jde-J2000. (Moon etc.)
 	// These should be updated as frequently as needed, optimally with the planet. Light time correction should be applied when needed.

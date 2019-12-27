@@ -230,7 +230,6 @@ double KeplerOrbit::calculateSiderealPeriod(const double semiMajorAxis)
 }
 
 
-
 /*
 
 EllipticalOrbit::EllipticalOrbit(double pericenterDistance,

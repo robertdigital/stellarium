@@ -74,7 +74,6 @@ MinorPlanet::MinorPlanet(const QString& englishName,
 		  pTypeStr),
 	minorPlanetNumber(0),
 	slopeParameter(-10.0f), // -10 == mark as uninitialized: used in getVMagnitude()
-	//semiMajorAxis(0.),
 	nameIsProvisionalDesignation(false),
 	properName(englishName),
 	b_v(99.f),
@@ -109,13 +108,6 @@ void MinorPlanet::setColorIndexBV(float bv)
 {
 	b_v = bv;
 }
-
-//void MinorPlanet::setSemiMajorAxis(double value)
-//{
-//	semiMajorAxis = value;
-//	// GZ: in case we have very many asteroids, this helps improving speed usually without sacrificing accuracy:
-//	deltaJDE = 2.0*qMax(semiMajorAxis, 0.1)*StelCore::JD_SECOND;
-//}
 
 void MinorPlanet::setMinorPlanetNumber(int number)
 {

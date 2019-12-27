@@ -1735,7 +1735,7 @@ double Planet::getSiderealTime(double JD, double JDE) const
 
 	const double t = JDE - re.epoch;
 	// oops... avoid division by zero (typical case for moons with chaotic period of rotation)
-	const double rotations = (re.period==0.f ? 1.  // moon with chaotic period of rotation
+	const double rotations = (re.period==0. ? 1.  // moon with chaotic period of rotation
 						: t / static_cast<double>(re.period));
 	const double wholeRotations = floor(rotations);
 	const double remainder = rotations - wholeRotations;
@@ -2914,17 +2914,7 @@ void Planet::draw3dModel(StelCore* core, StelProjector::ModelViewTranformP trans
 			// Special case for the Moon. Was 1.6, but this often is too bright.
 			light.diffuse.set(static_cast<float>(fovFactor),static_cast<float>(magFactorGreen*fovFactor),static_cast<float>(magFactorBlue*fovFactor));
 		}
-/* GZ This may be remains of a "lighting=false" condition that was possible before 0.16.
- * I think it can be deleted, given that lighting is always true now...
-		else
-		{
-			sPainter->setColor(albedo,magFactorGreen*albedo,magFactorBlue*albedo);
-			// GZ I think this is a bug: If no lighting, we must actively still set the light!
-			light.diffuse = Vec4f(0);
-			light.ambient = Vec4f(albedo,magFactorGreen*albedo,magFactorBlue*albedo);
 
-		}
-*/
 		// possibly tint sun's color from extinction. This should deliberately cause stronger reddening than for the other objects.
 		if (this==ssm->getSun())
 		{

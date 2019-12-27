@@ -125,7 +125,6 @@ public:
 
 private:
 	int minorPlanetNumber;
-	// float absoluteMagnitude; // now in Planet class already.
 	float  slopeParameter; // This is G from the H, G system for computation of apparent magnitude.
 	//double semiMajorAxis;  // orbital parameter. WHY DO WE NEED THAT SEPARATELY FROM ORBIT?
 
