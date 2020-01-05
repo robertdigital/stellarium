@@ -1125,6 +1125,8 @@ void SolarSystem::computePositions(double dateJDE, PlanetP observerPlanet)
 		// END HACK FOR SOLAR LIGHT TIME/ABERRATION
 		for (const auto& p : systemPlanets)
 		{
+			p->setExtraInfoString(StelObject::DebugAid, "");
+
 			const double light_speed_correction = (p->getHeliocentricEclipticPos()-obsPosJDE).length() * (AU / (SPEED_OF_LIGHT * 86400.));
 			p->computePosition(dateJDE-light_speed_correction);
 			if      (p->englishName=="Moon")    Planet::updatePlanetCorrections(dateJDE-light_speed_correction, Planet::EarthMoon);
@@ -1138,6 +1140,7 @@ void SolarSystem::computePositions(double dateJDE, PlanetP observerPlanet)
 	{
 		for (const auto& p : systemPlanets)
 		{
+			p->setExtraInfoString(StelObject::DebugAid, "");
 			p->computePosition(dateJDE);
 			if      (p->englishName=="Moon")    Planet::updatePlanetCorrections(dateJDE, Planet::EarthMoon);
 			else if (p->englishName=="Jupiter") Planet::updatePlanetCorrections(dateJDE, Planet::Jupiter);

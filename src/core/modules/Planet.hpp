@@ -121,9 +121,9 @@ public:
 	// These values are only in the modern algorithms. invalid if W0=0.
 	double W0;             // [deg] mean longitude of prime meridian along equator measured from intersection with ICRS plane at epoch.
 	double W1;             // [deg/d] mean longitude motion. W=W0+d*W1.
-	double currentAxisRA;  // Mostly debug aid (infostring during development). Usual model RA=RA0+d*RA1(+corrections)
-	double currentAxisDE;  // Mostly debug aid (infostring during development). Usual model DE=DE0+d*DE1(+corrections)
-	double currentAxisW;   // Mostly debug aid (infostring during development). Usual model W =W0+d*W1(+corrections)
+	double currentAxisRA;  // [rad] Mostly debug aid (infostring during development). Usual model RA=RA0+d*RA1(+corrections)
+	double currentAxisDE;  // [rad] Mostly debug aid (infostring during development). Usual model DE=DE0+d*DE1(+corrections)
+	double currentAxisW;   // [deg] Mostly debug aid (infostring during development). Usual model W =W0+d*W1(+corrections)
 };
 
 // Class to manage rings for planets like Saturn
