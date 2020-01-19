@@ -861,6 +861,7 @@ QString Planet::getInfoString(const StelCore* core, const InfoStringGroup& flags
 				oss << QString("%1: %2%").arg(q_("Eclipse obscuration")).arg(QString::number(eclipseObscuration, 'f', 2)) << "<br />";
 				if (onEarth)
 				{
+					// FIXME: This is for Solar eclipses only. Make sure it works for Mercury/Venus transits, or omit it then!
 					PlanetP moon = ssystem->getMoon();
 					const double eclipseMagnitude = (0.5*angularSize + (moon->getAngularSize(core)*M_PI/180.)/moon->getInfoMap(core)["scale"].toDouble() - getJ2000EquatorialPos(core).angle(moon->getJ2000EquatorialPos(core)))/angularSize;
 					oss << QString("%1: %2").arg(q_("Eclipse magnitude")).arg(QString::number(eclipseMagnitude, 'f', 3)) << "<br />";
@@ -906,6 +907,7 @@ QVariantMap Planet::getInfoMap(const StelCore *core) const
 			map.insert("eclipse-obscuration", eclipseObscuration);
 			if (core->getCurrentPlanet()==ssystem->getEarth())
 			{
+				// FIXME: This is for Solar eclipses only. Make sure it works for Mercury/Venus transits, or omit it then!
 				double angularSize = 2.*getAngularSize(core)*M_PI/180.;
 				PlanetP moon = ssystem->getMoon();
 				const double eclipseMagnitude = (0.5*angularSize + (moon->getAngularSize(core)*M_PI/180.)/moon->getInfoMap(core)["scale"].toDouble() - getJ2000EquatorialPos(core).angle(moon->getJ2000EquatorialPos(core)))/angularSize;
@@ -1785,6 +1787,7 @@ double Planet::getSiderealTime(double JD, double JDE) const
 		}
 		// re.currentAxisW=w; // TODO Maybe allow this later, and separate "computeSiderealTime()" from "getSiderealTime()"
 		// FIXME: Do "WHATEVER" to convert this into sidereal time!
+		//return w-re.currentAxisRA*M_180_PI;  // NOT working
 		return w;
 	}
 
@@ -2349,7 +2352,7 @@ void Planet::draw(StelCore* core, float maxMagLabels, const QFont& planetNameFon
 	// Exclude drawing if user set a hard limit magnitude.
 	if (core->getSkyDrawer()->getFlagPlanetMagnitudeLimit() && (getVMagnitude(core) > static_cast<float>(core->getSkyDrawer()->getCustomPlanetMagnitudeLimit())))
 	{
-		// Get the eclipse factor to avoid hiding the Moon during a total solar eclipse.
+		// Get the eclipse factor to avoid hiding the Moon during a total solar eclipse, or planets in transit over the Solar disk.
 		// Details: https://answers.launchpad.net/stellarium/+question/395139
 		if (GETSTELMODULE(SolarSystem)->getEclipseFactor(core)==1.0)
 			return;
