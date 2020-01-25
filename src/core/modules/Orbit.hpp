@@ -15,6 +15,7 @@
 #define ORBIT_HPP
 
 #include "VecMath.hpp"
+#include "StelUtils.hpp"
 
 //! @internal
 //! Orbit computations used for comets, minor planets and "simple" moons
@@ -98,6 +99,9 @@ public:
 	//! Returns semimajor axis [AU] for elliptic orbit, 0 for a parabolic orbit, and a negative value for hyperbolic orbit.
 	double getSemimajorAxis() const { return (e==1. ? 0. : q / (1.-e)); }
 	double getEccentricity() const { return e; }
+	//! For planet moons which have orbits given in relation to their parent planet's equator.
+	//! This is called by the constructor, and must be updated for parent planets when their axis changes over time.
+	void setParentOrientation(const double parentRotObliquity, const double parentRotAscendingNode, const double parentRotJ2000Longitude);
 	bool objectDateValid(const double JDE) const { return ((orbitGood<=0) || (fabs(t0-JDE)<orbitGood)); }
 	//! Calculate sidereal period in days from semi-major axis. If sMA<0 (hyperbolic orbit), return max double.
 	//! NOTE: The result is for a solar-centered orbit only!
@@ -117,4 +121,38 @@ private:
 	const double orbitGood; //! orb. elements are only valid for this time from perihel [days]. Don't draw the object outside. Values <=0 mean "always good" (objects on elliptic orbit)
 };
 
+//! A pseudo-orbit for "observers" linked to a planet's sphere. It allows setting distance and longitude/latitude in the VSOP87 frame.
+class GimbalOrbit : public Orbit {
+public:
+	GimbalOrbit(double distance,
+		   double longitude,
+		   double latitude
+		   );
+	//! Compute the orbit for a specified Julian day and return a "stellarium compliant" function
+	void positionAtTimevInVSOP87Coordinates(double JDE, double* v);
+	//! return speed value [AU/d] last computed by positionAtTimevInVSOP87Coordinates(JDE, v)
+	Vec3d getVelocity() const { return Vec3d(0.); }
+	void getVelocity(double *vel) const { vel[0]=0.; vel[1]=0.; vel[2]=0.;}
+	double getSemimajorAxis() const { return distance; } //! Returns semimajor axis [AU] for elliptic orbit, 0 for a parabolic orbit, and a negative value for hyperbolic orbit.
+	double getEccentricity() const { return 0; }
+	//! For planet moons which have orbits given in relation to their parent planet's equator.
+	//! This is called by the constructor, and must be updated for parent planets when their axis changes over time.
+	void setParentOrientation(const double parentRotObliquity, const double parentRotAscendingNode, const double parentRotJ2000Longitude);
+
+	double getLongitude() const { return longitude*M_180_PI;}
+	double getLatitude()  const { return latitude*M_180_PI;}
+	double getDistance()  const { return distance;}
+	void setLongitude(const double lng){ longitude=lng*M_PI_180;}
+	void setLatitude(const double lat) { latitude=lat*M_PI_180;}
+	void setDistance(const double dist){ distance=dist;}
+	void addToLongitude(const double dlong){ longitude+=dlong*M_PI_180; }
+	void addToLatitude(const double dlat)  { latitude=qBound(-M_PI_2, latitude+dlat*M_PI_180, M_PI_2);}
+	void addToDistance(const double ddist) { distance=qBound(0.01, distance+ddist, 50.);}
+
+private:
+	double distance;   //! distance to parent planet center, AU
+	double longitude;  //! longitude [radians]
+	double latitude;   //! latitude [radians]
+	double rotateToVsop87[9]; //! Rotation matrix.
+};
 #endif // ORBIT_HPP

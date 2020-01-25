@@ -147,16 +147,28 @@ KeplerOrbit::KeplerOrbit(double pericenterDistance,
 	  w(argOfPerhelion),
 	  t0(timeAtPerihelion),
 	  n(meanMotion),
+	  rdot(0.0),
 	  updateTails(true),
 	  orbitGood(orbitGoodDays)
 {
-	// GZ MAKE SURE THIS IS ALWAYS 0/0/0. ==> OK.
-	//qDebug() << "parentRotObliquity" << parentRotObliquity << "parentRotAscendingnode" << parentRotAscendingnode << "parentRotJ2000Longitude" << parentRotJ2000Longitude;
-	rdot.set(0.0, 0.0, 0.0);
+	// For Comets and Minor planets, this just builds a unity matrix. For moons, it rotates into the equatorial system of the parent planet
+	setParentOrientation(parentRotObliquity, parentRotAscendingnode, parentRotJ2000Longitude);
+}
+
+// For planet moons which have orbits given in relation to their parent planet's equator.
+// This is called by the constructor, and must be updated for parent planets when their axis changes over time.
+void KeplerOrbit::setParentOrientation(const double parentRotObliquity, const double parentRotAscendingNode, const double parentRotJ2000Longitude)
+{
+	// GZ MAKE SURE THIS IS ALWAYS 0/0/0. ==> OK for all sun-parented objects: Minor Planets and Comets.
+	qDebug() << "parentRotObliquity" << parentRotObliquity*M_180_PI << "parentRotAscendingnode" << parentRotAscendingNode*M_180_PI << "parentRotJ2000Longitude" << parentRotJ2000Longitude*M_180_PI;
+	// For Moons on Kepler orbits, these elements describe the orientation of its orbit, apparently in epoch J2000.
+	// This indicates that in Stellarium, all those moon orbits are given with relation to the Planet equator.
+	// The problem is that on a planet with changing axis, this rotation matrix should be recomputed e.g. once per year or so.
+	// Another problem is that probably moons exist with elements given in other reference frames. ExplanSup2013 even has many orbits w.r.t. B1950 ecliptic.
 	const double c_obl = cos(parentRotObliquity);
 	const double s_obl = sin(parentRotObliquity);
-	const double c_nod = cos(parentRotAscendingnode);
-	const double s_nod = sin(parentRotAscendingnode);
+	const double c_nod = cos(parentRotAscendingNode);
+	const double s_nod = sin(parentRotAscendingNode);
 	const double cj = cos(parentRotJ2000Longitude);
 	const double sj = sin(parentRotJ2000Longitude);
 
@@ -169,8 +181,8 @@ KeplerOrbit::KeplerOrbit(double pericenterDistance,
 	rotateToVsop87[6] =                 s_obl*sj;
 	rotateToVsop87[7] =                 s_obl*cj;
 	rotateToVsop87[8] =                 c_obl;
-	//  qDebug() << "CometOrbit::()...done";
 }
+
 
 void KeplerOrbit::positionAtTimevInVSOP87Coordinates(double JDE, double *v)
 {
@@ -229,6 +241,48 @@ double KeplerOrbit::calculateSiderealPeriod(const double semiMajorAxis)
 	return (semiMajorAxis >=0 ? (2.*M_PI/0.01720209895)*sqrt(semiMajorAxis*semiMajorAxis*semiMajorAxis) : std::numeric_limits<double>::max() );
 }
 
+GimbalOrbit::GimbalOrbit(double distance, double longitude, double latitude):
+	distance(distance),
+	longitude(longitude),
+	latitude(latitude)
+{
+	setParentOrientation(0., 0., 0.);
+};
+//! Compute the position (JDE is just a placeholder) and return a "stellarium compliant" position
+void GimbalOrbit::positionAtTimevInVSOP87Coordinates(double JDE, double* v)
+{
+	Q_UNUSED(JDE)
+	Vec3d pos;
+	StelUtils::spheToRect(longitude, latitude, pos);
+	v[0] = rotateToVsop87[0]*pos[0] + rotateToVsop87[1]*pos[1] + rotateToVsop87[2]*pos[2];
+	v[1] = rotateToVsop87[3]*pos[0] + rotateToVsop87[4]*pos[1] + rotateToVsop87[5]*pos[2];
+	v[2] = rotateToVsop87[6]*pos[0] + rotateToVsop87[7]*pos[1] + rotateToVsop87[8]*pos[2];
+	v[0] *= distance;
+	v[1] *= distance;
+	v[2] *= distance;
+}
+//! return speed value [AU/d] last computed by positionAtTimevInVSOP87Coordinates(JDE, v)
+//! For planet moons which have orbits given in relation to their parent planet's equator.
+//! This is called by the constructor, and must be updated for parent planets when their axis changes over time.
+void GimbalOrbit::setParentOrientation(const double parentRotObliquity, const double parentRotAscendingNode, const double parentRotJ2000Longitude)
+{
+	const double c_obl = cos(parentRotObliquity);
+	const double s_obl = sin(parentRotObliquity);
+	const double c_nod = cos(parentRotAscendingNode);
+	const double s_nod = sin(parentRotAscendingNode);
+	const double cj = cos(parentRotJ2000Longitude);
+	const double sj = sin(parentRotJ2000Longitude);
+
+	rotateToVsop87[0] =  c_nod*cj-s_nod*c_obl*sj;
+	rotateToVsop87[1] = -c_nod*sj-s_nod*c_obl*cj;
+	rotateToVsop87[2] =           s_nod*s_obl;
+	rotateToVsop87[3] =  s_nod*cj+c_nod*c_obl*sj;
+	rotateToVsop87[4] = -s_nod*sj+c_nod*c_obl*cj;
+	rotateToVsop87[5] =          -c_nod*s_obl;
+	rotateToVsop87[6] =                 s_obl*sj;
+	rotateToVsop87[7] =                 s_obl*cj;
+	rotateToVsop87[8] =                 c_obl;
+}
 
 /*
 

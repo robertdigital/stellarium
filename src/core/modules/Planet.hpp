@@ -47,6 +47,7 @@ typedef void (OsculatingFunctType)(double jde0,double jde,double xyz[3], double 
 #define J2000 2451545.0
 #define ORBIT_SEGMENTS 360
 
+class Orbit;
 class KeplerOrbit;
 class StelFont;
 class StelPainter;
@@ -105,7 +106,8 @@ public:
 	double ascendingNode;   // long. of ascending node of equator on the ecliptic [radians]
 	// Field rot_precession_rate in ssystem.ini is no longer used. We still keep Earth's value as it is evaluated in older versions (until 0.13.*).
 //	float precessionRate;  // rate of precession of rotation axis in [rads/JulianCentury(36525d)] [ NO LONGER USED WITH 0.14 (was used for Earth only, and that was too simple.) ]
-	double siderealPeriod; // sidereal period (Planet year or a moon's sidereal month) [earth days]
+	double siderealPeriod; // sidereal period (Planet year or a moon's sidereal month) [earth days] [FIXME: This is NOT a rotational element and should be stored elsewhere!]
+			       // IDEA: Have a global QMap<PlanetName,siderealPeriod> which is filled at SolarSystem loading time.
 	// GZ for 0.19: I propose changes here: The 6 new entries after the switch are enough for many objects. Else, design special_functions.
 	bool useICRF;          // Use values w.r.t. ICRF (should ultimately be true for all objects!) This can be set when rot_pole_ra1 or w0(?) is given. Updating the axis is required if ra1<>0
 	double ra0;            // [rad] RA_0 right ascension of north pole. ssystem.ini: rot_pole_ra    /180*M_PI
@@ -206,7 +208,7 @@ public:
 	       const QString& normalMapName,
 	       const QString& objModelName,
 	       posFuncType _coordFunc,
-	       KeplerOrbit *anOrbitPtr,
+	       Orbit *anOrbitPtr,
 	       OsculatingFunctType *osculatingFunc,
 	       bool closeOrbit,
 	       bool hidden,
@@ -305,6 +307,7 @@ public:
 	const QString& getTextMapName() const {return texMapName;}
 	const QString getPlanetTypeString() const {return pTypeMap.value(pType);}
 	PlanetType getPlanetType() const {return pType;}
+	Orbit* getOrbit() const {return orbitPtr;}
 
 	void setNativeName(QString planet) { nativeName = planet; }
 
@@ -351,7 +354,6 @@ public:
 				 const double _ra0, const double _ra1,
 				 const double _de0, const double _de1,
 				 const double _w0,  const double _w1,
-				 //float _precessionRate,
 				 const double _siderealPeriod);
 	double getRotAscendingNode(void) const {return re.ascendingNode; }
 	// return angle between axis and normal of ecliptic plane (or, for a moon, equatorial/reference plane defined by parent).
@@ -652,7 +654,9 @@ protected:
 	double lastJDE;                  // caches JDE of last positional computation
 	// The callback for the calculation of the equatorial rect heliocentric position at time JDE.
 	posFuncType coordFunc;
-	KeplerOrbit* orbitPtr;           // Usable for positional computations of Minor Planets, Comets and Moons. For the major planets, it is Q_NULLPTR.
+	Orbit* orbitPtr;           // Usable for positional computations of Minor Planets, Comets and Moons.
+				   // For the major planets, it is Q_NULLPTR.
+				   // For an "observer", it is GizmoOrbit.
 
 	OsculatingFunctType *const osculatingFunc;
 	QSharedPointer<Planet> parent;           // Planet parent i.e. sun for earth

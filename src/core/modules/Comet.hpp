@@ -101,7 +101,7 @@ public:
 	//! as the same parameters in MinorPlanet.
 	void setAbsoluteMagnitudeAndSlope(const float magnitude, const float slope);
 
-	//! get sidereal period for comet, days, or returns 0 if not possible (paraboloid, hyperboloid orbit)
+	//! get sidereal period for comet, days, or returns 0 if not possible (parabolic, hyperbolic orbit)
 	virtual double getSiderealPeriod() const Q_DECL_OVERRIDE;
 
 	//! re-implementation of Planet's draw()
