@@ -356,7 +356,7 @@ double StelMovementMgr::getCallOrder(StelModuleActionName actionName) const
 void StelMovementMgr::handleKeys(QKeyEvent* event)
 {
 	StelCore *core=StelApp::getInstance().getCore();
-	Planet* obsPlanet= core->getCurrentPlanet().get();
+	Planet* obsPlanet= core->getCurrentPlanet().data();
 	GimbalOrbit *gimbal=Q_NULLPTR;
 	if (obsPlanet->getPlanetType()==Planet::isObserver)
 	{
