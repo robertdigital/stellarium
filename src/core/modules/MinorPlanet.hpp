@@ -111,8 +111,8 @@ public:
 	//! designation.
 	static QString renderProvisionalDesignationinHtml(QString plainText);
 
-	//! set value for semi-major axis in AU
-	void setSemiMajorAxis(double value);
+//	//! set value for semi-major axis in AU
+//	void setSemiMajorAxis(double value);
 
 	//! set values for spectral types
 	void setSpectralType(QString sT="", QString sB="");

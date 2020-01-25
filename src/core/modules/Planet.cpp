@@ -1169,7 +1169,6 @@ void Planet::computeTransMatrix(double JD, double JDE)
 				Mat4d::zrotation(re.ascendingNode) * Mat4d::xrotation(re.obliquity);
 
 		// MAYBE rotLocalToParent=StelCore::matJ2000ToVsop87 * Mat4d::zrotation(re.ra0) * Mat4d::xrotation(M_PI_2-re.de0);
-
 	} else
 	if (parent)
 	{
@@ -1507,7 +1506,6 @@ void Planet::computeTransMatrix(double JD, double JDE)
 		}
 		else {
 			debugAid.append( QString("CTMxNR: No retransform. re.obliquity=%1, re.ascendingNode=%2 <br/>").arg(StelUtils::radToDecDegStr(re.obliquity)).arg(StelUtils::radToDecDegStr(re.ascendingNode)));
-
 		}
 		switch (re.method) {
 			case RotationElements::WGCCRE:
